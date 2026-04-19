@@ -1,0 +1,8 @@
+{
+  "/_not-found/page": "app/_not-found/page.js",
+  "/page": "app/page.js",
+  "/api/waitlist/route": "app/api/waitlist/route.js",
+  "/dashboard/campaigns/page": "app/dashboard/campaigns/page.js",
+  "/dashboard/page": "app/dashboard/page.js",
+  "/dashboard/contacts/page": "app/dashboard/contacts/page.js"
+}
