@@ -27,15 +27,15 @@ const statCards = [
     color: 'border-green-500/20',
   },
   {
-    label: 'Messages Sent',
+    label: 'Active Automations',
     value: '0',
-    change: 'This month',
+    change: 'running',
     icon: (
-      <svg className="w-6 h-6 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+      <svg className="w-6 h-6 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
       </svg>
     ),
-    color: 'border-blue-500/20',
+    color: 'border-purple-500/20',
   },
   {
     label: 'Quick Actions',
@@ -48,7 +48,7 @@ const statCards = [
 ];
 
 export default function DashboardPage() {
-  const [stats, setStats] = useState({ contacts: 0, campaigns: 0, messages: 0 });
+  const [stats, setStats] = useState({ contacts: 0, campaigns: 0, messages: 0, automations: 0 });
   const [recentCampaigns, setRecentCampaigns] = useState<any[]>([]);
 
   useEffect(() => {
@@ -56,20 +56,23 @@ export default function DashboardPage() {
     Promise.all([
       fetch('/api/contacts').then(r => r.json()).catch(() => ({ contacts: [] })),
       fetch('/api/campaigns').then(r => r.json()).catch(() => ({ campaigns: [] })),
-    ]).then(([cData, campData]) => {
+      fetch('/api/automations').then(r => r.json()).catch(() => ({ automations: [] })),
+    ]).then(([cData, campData, autoData]) => {
+      const activeAuto = (autoData.automations || []).filter((a: any) => a.isEnabled).length;
       setStats({
         contacts: cData.contacts?.length || 0,
         campaigns: campData.campaigns?.length || 0,
         messages: campData.campaigns?.reduce((a: number, c: any) => a + (c._count?.messages || 0), 0) || 0,
+        automations: activeAuto,
       });
       setRecentCampaigns(campData.campaigns?.slice(0, 5) || []);
     });
   }, []);
 
   const cards = [
-    { ...statCards[0], value: stats.contacts.toString(), change: stats.contacts > 0 ? `+${stats.contacts} total` : 'No contacts yet' },
-    { ...statCards[1], value: stats.campaigns.toString(), change: `${stats.campaigns} campaign${stats.campaigns !== 1 ? 's' : ''} created` },
-    { ...statCards[2], value: stats.messages.toString(), change: 'messages sent' },
+    { ...statCards[0], value: stats.contacts.toString(), change: stats.contacts > 0 ? `${stats.contacts} contacts` : 'No contacts yet' },
+    { ...statCards[1], value: stats.campaigns.toString(), change: `${stats.campaigns} campaign${stats.campaigns !== 1 ? 's' : ''}` },
+    { ...statCards[2], value: stats.automations.toString(), change: `automations active` },
     statCards[3],
   ];
 
@@ -158,6 +161,7 @@ export default function DashboardPage() {
         <h2 className="font-heading text-lg text-slate mb-4">🚀 Get started checklist</h2>
         <div className="space-y-3">
           {[
+            { done: stats.automations > 0, text: 'Set up your first automation', href: '/dashboard/automations' },
             { done: stats.contacts > 0, text: 'Import your contacts', href: '/dashboard/contacts' },
             { done: stats.campaigns > 0, text: 'Create your first campaign', href: '/dashboard/campaigns' },
             { done: false, text: 'Connect your WhatsApp number', href: '/dashboard/connect' },
