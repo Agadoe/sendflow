@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 
 function getUserId(req: Request): string | null {
   const cookieHeader = req.headers.get('cookie');
-  return cookieHeader ? cookieHeader.match(/sf_token=([^;]+)/)?.[1] : null;
+  return cookieHeader ? (cookieHeader.match(/sf_token=([^;]+)/)?.[1] ?? null) : null;
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
