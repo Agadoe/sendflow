@@ -61,7 +61,7 @@ export default function HomePage() {
     },
     {
       name: 'Starter',
-      price: 350,
+      price: 299,
       messages: 500,
       contacts: 2000,
       users: 2,
@@ -72,7 +72,7 @@ export default function HomePage() {
     },
     {
       name: 'Growth',
-      price: 950,
+      price: 799,
       messages: 3000,
       contacts: 10000,
       users: 5,
@@ -82,7 +82,7 @@ export default function HomePage() {
     },
     {
       name: 'Pro',
-      price: 2400,
+      price: 1999,
       messages: 20000,
       contacts: -1,
       users: 99,
@@ -126,7 +126,7 @@ export default function HomePage() {
           </div>
           <h1 className="font-heading text-5xl md:text-6xl text-slate leading-tight mb-6 animate-fade-up" style={{ animationDelay: '80ms' }}>
             Send Bulk WhatsApp Messages<br />
-            <span className="text-amber">From GHS 350/month</span>
+            <span className="text-amber">From GHS 299/month</span>
           </h1>
           <p className="text-lg text-slate-light md:text-xl max-w-2xl mx-auto mb-10 animate-fade-up" style={{ animationDelay: '160ms' }}>
             Reach thousands of customers instantly. Schedule campaigns, automate follow-ups with drip sequences,
