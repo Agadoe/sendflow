@@ -108,6 +108,9 @@ export default function HomePage() {
             </div>
             <span className="font-heading text-xl text-slate">SendFlow</span>
           </div>
+          <a href="/contact" className="text-sm font-medium text-slate hover:text-amber transition-colors">
+            Contact
+          </a>
           <a href="#pricing" className="text-sm font-medium text-slate hover:text-amber transition-colors">
             View Pricing
           </a>
@@ -445,6 +448,7 @@ export default function HomePage() {
           </div>
           <div className="flex gap-4 text-sm">
             <a href="/policy" className="text-gray-400 hover:text-white transition-colors">Privacy &amp; Refund Policy</a>
+            <a href="/contact" className="text-gray-400 hover:text-white transition-colors">Contact</a>
           </div>
           <div className="text-sm">© 2026 SendFlow. Built for African businesses 🇬🇭</div>
         </div>
