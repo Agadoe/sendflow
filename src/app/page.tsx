@@ -61,7 +61,7 @@ export default function HomePage() {
     },
     {
       name: 'Starter',
-      price: 29,
+      price: 350,
       messages: 500,
       contacts: 2000,
       users: 2,
@@ -72,7 +72,7 @@ export default function HomePage() {
     },
     {
       name: 'Growth',
-      price: 79,
+      price: 950,
       messages: 3000,
       contacts: 10000,
       users: 5,
@@ -82,7 +82,7 @@ export default function HomePage() {
     },
     {
       name: 'Pro',
-      price: 199,
+      price: 2400,
       messages: 20000,
       contacts: -1,
       users: 99,
@@ -122,9 +122,8 @@ export default function HomePage() {
             Now in early access — Join 200+ businesses
           </div>
           <h1 className="font-heading text-5xl md:text-6xl text-slate leading-tight mb-6 animate-fade-up" style={{ animationDelay: '80ms' }}>
-            Send Bulk WhatsApp Messages
-            <br />
-            <span className="text-amber">From $29/month</span>
+            Send Bulk WhatsApp Messages<br />
+            <span className="text-amber">From GHS 350/month</span>
           </h1>
           <p className="text-lg text-slate-light md:text-xl max-w-2xl mx-auto mb-10 animate-fade-up" style={{ animationDelay: '160ms' }}>
             Reach thousands of customers instantly. Schedule campaigns, automate follow-ups with drip sequences,
@@ -262,14 +261,14 @@ export default function HomePage() {
               Every day you copy-paste messages to dozens of customers. It takes hours. Messages get missed. There&apos;s no system, no tracking, no way to know who actually received your promotions.
             </p>
             <p className="text-slate-light leading-relaxed">
-              Meanwhile, big tools like WATI charge <strong className="text-slate">$120+/month</strong> — way too expensive for most African businesses.
+              Meanwhile, big tools like WATI charge <strong className="text-slate">GHS 1,500+/month</strong> — way too expensive for most African businesses.
             </p>
           </div>
           <div className="space-y-4">
             {[
               { emoji: '😩', text: 'Sending promotions one by one takes hours' },
               { emoji: '📵', text: 'No way to track who received your message' },
-              { emoji: '💸', text: 'Enterprise tools cost $120+ per month' },
+              { emoji: '💸', text: 'Enterprise tools cost GHS 1,500+/month' },,
               { emoji: '📋', text: 'Contacts scattered across phone, paper, memory' },
             ].map(({ emoji, text }) => (
               <div key={text} className="flex items-start gap-4 p-4 bg-cream rounded-card border border-amber/5">
@@ -373,11 +372,11 @@ export default function HomePage() {
                   )}
                   <div className={`text-lg font-heading text-slate mb-1`}>{plan.name}</div>
                   <div className="flex items-baseline gap-1 mb-1">
-                    <span className="font-heading text-4xl text-slate">${price}</span>
+                    <span className="font-heading text-4xl text-slate">GHS {plan.price.toLocaleString()}</span>
                     {plan.price > 0 && <span className="text-slate-light text-sm">{period}</span>}
                   </div>
                   {billing === 'annual' && plan.price > 0 && (
-                    <div className="text-xs text-slate-light mb-3">${plan.price}/mo billed annually</div>
+                    <div className="text-xs text-slate-light mb-3">GHS {plan.price.toLocaleString()}/mo billed annually</div>
                   )}
                   <p className="text-sm text-slate-light mb-4">{plan.desc}</p>
                   <ul className="space-y-2 mb-6">
@@ -420,7 +419,7 @@ export default function HomePage() {
               { q: 'What if I don\'t have a WhatsApp number yet?', a: 'You can use any personal WhatsApp number to start. We\'ll guide you through connecting it in under 5 minutes.' },
               { q: 'How does payment work?', a: 'For MVP, we\'ll accept MTN Mobile Money and bank transfers. Card payments via Paystack are coming in Phase 2.' },
               { q: 'Can I import contacts without a CSV?', a: 'Yes. You can add contacts manually one by one, or copy-paste a list of phone numbers.' },
-              { q: 'What happens if I exceed my message limit?', a: 'You\'ll get an alert when you reach 80% of your limit. Extra messages are available at $0.03 each.' },
+              { q: 'What happens if I exceed my message limit?', a: 'You\'ll get an alert when you reach 80% of your limit. Extra messages are available at GHS 0.40 each.' },
             ].map(({ q, a }) => <FAQItem key={q} q={q} a={a} />)}
           </div>
         </div>
