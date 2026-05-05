@@ -1,10 +1,16 @@
 # WhatsApp SaaS — Product Specification
 
-## 1. Concept & Vision
+## 2. Concept & Vision
 
 A bulk WhatsApp marketing platform for African SMBs — salons, boutiques, restaurants, network marketers, churches. The product communicates **clarity, reliability, and African warmth** — not another cold Silicon Valley SaaS. It's the tool a busy shop owner in Accra opens every morning to broadcast their daily deals.
 
 **Product name:** SendFlow — tagline: *"Reach them where they already are."*
+
+**Competitive positioning:**
+- Focus on **simplicity and affordability** vs. feature-bloated enterprise tools
+- **Drip messaging + native lead forms** as primary differentiators vs. WhatChimp
+- Target African payment realities (M-Pesa, bank transfer) — not credit-card-centric
+- Warm, confident brand voice — not corporate, not hype
 
 ---
 
@@ -67,7 +73,7 @@ A bulk WhatsApp marketing platform for African SMBs — salons, boutiques, resta
 10. **Footer** — Links, legal, social
 
 ### Dashboard (authenticated)
-- **Sidebar** — Navigation (Campaigns, Contacts, Analytics, Settings)
+- **Sidebar** — Navigation (Campaigns, Contacts, Automations, Analytics, Settings)
 - **Main area** — Active view with top stats bar
 - **WhatsApp connection status** — prominent indicator
 
@@ -86,16 +92,31 @@ A bulk WhatsApp marketing platform for African SMBs — salons, boutiques, resta
 - **FAQ accordion:** click to expand/collapse
 
 ### Dashboard — Campaign Builder
-- **Step 1 — Recipients:** CSV upload (drag-and-drop) or manual add → shows contact count + validation status
+- **Step 1 — Recipients:** CSV upload (drag-and-drop) or manual add → shows contact count + validation status. Also select from saved segments.
 - **Step 2 — Compose:** Rich text editor (bold, italic, links) + media attachment (image/document) + preview as WhatsApp message bubble
 - **Step 3 — Schedule or Send:** Schedule for later datetime OR send immediately → confirmation modal → spinning state → result toast
 - **Campaign list:** Table with status badges (Draft, Scheduled, Sent, Failed) + stats (Sent, Delivered, Failed, Pending)
+- **Campaign duplication:** Copy an existing campaign as a starting point for new ones
+- **Recurring campaigns:** Set campaigns to repeat daily, weekly, or monthly — ideal for recurring promotions or appointment reminders
 
 ### Dashboard — Contacts
 - Upload CSV/Excel with column mapping UI
 - Searchable contact list (name, phone, tags)
-- Bulk tag/untag
+- **Bulk tag/untag:** Select multiple contacts and apply or remove tags at once
+- **Contact segmentation:** Filter contacts by tag, date added, or name — save segments as reusable recipient lists for campaigns
 - Import history log
+- **Native WhatsApp Form:** A shareable link that opens a WhatsApp chat and collects data via a conversational form (name, phone, custom questions). Responses auto-saved as contacts with tags. Great for lead capture without a landing page.
+
+### Dashboard — Automations (Drip Messaging)
+- Visual automation builder — no-code flow builder with trigger → condition → action blocks
+- Trigger types:
+  - **Contact added** — e.g. welcome message series
+  - **Tag applied** — trigger a follow-up sequence when a contact is tagged "hot-lead"
+  - **Date/time-based (Drip)** — delay X hours/days, then send a message. Chain multiple delays to build a drip sequence
+- Conditions: "if contact has tag X, skip step Y"
+- Actions per step: Send a template message, Apply tag, Remove tag, Send to another automation
+- Automation execution log — see which contacts entered, which steps completed, which dropped off
+- Toggle automations on/off without deleting them
 
 ### Dashboard — Analytics
 - Campaign performance cards: Total Sent, Delivered Rate %, Failed Rate %
@@ -105,9 +126,13 @@ A bulk WhatsApp marketing platform for African SMBs — salons, boutiques, resta
 
 ### Dashboard — Settings
 - **WhatsApp Connection:** Connect via wacli (show connection flow instructions) + status indicator
-- **Team Members:** Invite by email, role (Admin, Editor, Viewer)
+- **Team Members & Roles:** Invite team members by email with role-based access:
+  - **Admin** — full access including billing and settings
+  - **Editor** — can create and send campaigns, manage contacts
+  - **Viewer** — read-only access to campaigns and analytics
 - **Billing:** Current plan, upgrade button, billing history (static for MVP)
 - **API Keys:** Display generated API key + copy button
+- **Click-to-WhatsApp Links:** Generate shareable links that open a WhatsApp chat with a pre-filled message. Useful for Meta/Instagram ads, website buttons, and social posts. Each link can include UTM parameters for tracking.
 
 ### Error States
 - CSV upload wrong format → red error banner with format hints
@@ -202,42 +227,70 @@ A bulk WhatsApp marketing platform for African SMBs — salons, boutiques, resta
 
 ### API Design
 ```
-POST   /api/auth/register       — create account
-POST   /api/auth/login          — magic link send
-POST   /api/auth/verify         — verify magic link token
-GET    /api/auth/me             — current user
+POST   /api/auth/register         — create account
+POST   /api/auth/login            — magic link send
+POST   /api/auth/verify           — verify magic link token
+GET    /api/auth/me               — current user
 
-GET    /api/campaigns           — list campaigns
-POST   /api/campaigns           — create campaign
-GET    /api/campaigns/:id       — get campaign detail
-PUT    /api/campaigns/:id       — update campaign
-DELETE /api/campaigns/:id       — delete campaign
-POST   /api/campaigns/:id/send  — send campaign now
+GET    /api/campaigns             — list campaigns
+POST   /api/campaigns             — create campaign
+GET    /api/campaigns/:id         — get campaign detail
+PUT    /api/campaigns/:id         — update campaign
+DELETE /api/campaigns/:id         — delete campaign
+POST   /api/campaigns/:id/send    — send campaign now
+POST   /api/campaigns/:id/duplicate — duplicate a campaign
 
-GET    /api/contacts            — list contacts (paginated)
-POST   /api/contacts/import    — CSV upload + parse
-DELETE /api/contacts/:id        — delete contact
+GET    /api/contacts              — list contacts (paginated, filterable by tag)
+POST   /api/contacts/import       — CSV upload + parse
+DELETE /api/contacts/:id          — delete contact
+PUT    /api/contacts/:id/tags     — bulk update tags
+GET    /api/contacts/segments     — list saved segments
+POST   /api/contacts/segments     — save a segment filter set
 
-GET    /api/analytics           — dashboard stats
-GET    /api/analytics/:id       — per-campaign stats
+GET    /api/automations           — list automations
+POST   /api/automations           — create automation
+GET    /api/automations/:id       — get automation detail
+PUT    /api/automations/:id       — update automation
+DELETE /api/automations/:id       — delete automation
+POST   /api/automations/:id/toggle — enable/disable
+GET    /api/automations/:id/logs  — execution logs
 
-GET    /api/settings            — user settings
-PUT    /api/settings            — update settings
-POST   /api/settings/upgrade   — trigger upgrade flow
+GET    /api/analytics             — dashboard stats
+GET    /api/analytics/:id         — per-campaign stats
 
-POST   /api/webhooks/paystack   — payment webhook
+GET    /api/settings              — user settings
+PUT    /api/settings              — update settings
+POST   /api/settings/upgrade      — trigger upgrade flow
+GET    /api/settings/team         — list team members
+POST   /api/settings/team/invite  — invite team member
+DELETE /api/settings/team/:id     — remove team member
+GET    /api/links                 — list click-to-WhatsApp links
+POST   /api/links                 — create a new link
+
+POST   /api/webhooks/paystack     — payment webhook
 ```
 
 ### Data Model
 ```prisma
 User          — id, email, name, phone, plan, createdAt
-Campaign      — id, userId, name, status, scheduledAt, sentAt, createdAt
+Campaign      — id, userId, name, status, scheduledAt, sentAt, recurrence, createdAt
 Message       — id, campaignId, contactId, status, sentAt, deliveredAt, failedAt
 Contact       — id, userId, phone, name, tags[], createdAt
+Automation    — id, userId, name, description, trigger, triggerConfig, conditions, actions, isEnabled, lastTriggered
+AutomationExecution — id, automationId, contactId, event, payload, executedAt
 Payment       — id, userId, amount, plan, status, createdAt
 Waitlist      — id, email, name, businessType, phone, createdAt
 ApiKey        — id, userId, key, lastUsed, createdAt
+TeamMember    — id, userId, email, role (ADMIN|EDITOR|VIEWER), invitedAt, joinedAt
+ClickToWhatsAppLink — id, userId, name, phone, prefillMsg, utmSource, utmMedium, utmCampaign, createdAt
 ```
+
+**Schema changes from original:**
+- `Campaign` gains `recurrence` field (DAILY|WEEKLY|MONTHLY|null)
+- `Automation` model already has `trigger`, `triggerConfig`, `conditions`, `actions` — fully supports drip sequences
+- New: `TeamMember` — roles & permissions
+- New: `ClickToWhatsAppLink` — click-to-WhatsApp link generator
+- `Contact.tags` already exists as String/JSON array
 
 ### Environment Variables
 ```

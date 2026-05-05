@@ -21,6 +21,7 @@ export default function HomePage() {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [businessType, setBusinessType] = useState('');
+  const [wantsCall, setWantsCall] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [billing, setBilling] = useState<'monthly' | 'annual'>('monthly');
@@ -33,7 +34,7 @@ export default function HomePage() {
       const res = await fetch('/api/waitlist', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, phone, businessType }),
+        body: JSON.stringify({ name, email, phone, businessType, wantsCall }),
       });
       if (res.ok) {
         setSubmitted(true);
@@ -166,6 +167,18 @@ export default function HomePage() {
                   <option value="">Business type</option>
                   {businessTypes.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="wantsCall"
+                  checked={wantsCall}
+                  onChange={e => setWantsCall(e.target.checked)}
+                  className="w-4 h-4 rounded border-gray-300 text-amber focus:ring-amber"
+                />
+                <label htmlFor="wantsCall" className="text-sm text-slate-light cursor-pointer">
+                  Yes, I'd like a free onboarding call when SendFlow launches
+                </label>
               </div>
               <button
                 type="submit"

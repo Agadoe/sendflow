@@ -1,5 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
 }
 
 datasource db {
@@ -15,16 +16,23 @@ model User {
   plan          String    @default("FREE")
   passwordHash  String?
   emailVerified DateTime? @default(now())
+  isOwner       Boolean   @default(false) // true for the account creator / primary user
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  campaigns  Campaign[]
-  contacts   Contact[]
-  payments   Payment[]
-  apiKeys    ApiKey[]
-  sessions   Session[]
-  accounts   Account[]
-  automations Automation[]
+  campaigns   Campaign[]
+  contacts    Contact[]
+  payments    Payment[]
+  apiKeys     ApiKey[]
+  sessions    Session[]
+  accounts    Account[]
+  automations     Automation[]
+  leads          Lead[]
+  leadActivities LeadActivity[]
+  teamMembers   TeamMember[]
+  clickToWhatsAppLinks ClickToWhatsAppLink[]
+  whatsAppForms       WhatsAppForm[]
+  dripScheduledMessages DripScheduledMessage[]
 }
 
 model Account {
@@ -71,27 +79,29 @@ model Campaign {
   status      String    @default("DRAFT")
   scheduledAt DateTime?
   sentAt      DateTime?
+  recurrence  String?   // DAILY | WEEKLY | MONTHLY | null
   createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  updatedAt  DateTime  @updatedAt
 
   user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   messages Message[]
 }
 
 model Message {
-  id             String    @id @default(cuid())
-  campaignId     String
-  contactId      String
-  status         String    @default("PENDING")
-  sentAt         DateTime?
-  deliveredAt    DateTime?
-  failedAt       DateTime?
-  failureReason  String?
-  createdAt      DateTime  @default(now())
+  id            String    @id @default(cuid())
+  campaignId    String
+  contactId     String
+  status        String    @default("PENDING")
+  sentAt        DateTime?
+  deliveredAt   DateTime?
+  failedAt      DateTime?
+  failureReason String?
+  createdAt     DateTime  @default(now())
 
   campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   contact  Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
 }
+
 
 model Contact {
   id        String   @id @default(cuid())
@@ -103,6 +113,7 @@ model Contact {
 
   user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   messages Message[]
+  dripScheduledMessages DripScheduledMessage[]
 }
 
 model Payment {
@@ -123,6 +134,7 @@ model Waitlist {
   name         String
   businessType String?
   phone        String?
+  wantsCall    Boolean  @default(false)
   createdAt    DateTime @default(now())
 }
 
@@ -137,30 +149,134 @@ model ApiKey {
 }
 
 model Automation {
-  id             String    @id @default(cuid())
-  userId         String
-  name           String
-  description    String?
-  trigger        String
-  triggerConfig  String    @default("{}")
-  conditions     String    @default("[]")
-  actions        String    @default("[]")
-  isEnabled      Boolean   @default(true)
-  lastTriggered  DateTime?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  id            String    @id @default(cuid())
+  userId        String
+  name          String
+  description   String?
+  trigger       String
+  triggerConfig String    @default("{}")
+  conditions    String    @default("[]")
+  actions       String    @default("[]")
+  isEnabled     Boolean   @default(true)
+  lastTriggered DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
-  user       User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user       User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   executions AutomationExecution[]
+  dripMessages DripScheduledMessage[]
 }
 
 model AutomationExecution {
-  id            String   @id @default(cuid())
-  automationId  String
-  contactId     String?
-  event         String
-  payload       String?
-  executedAt    DateTime @default(now())
+  id           String   @id @default(cuid())
+  automationId String
+  contactId    String?
+  event        String
+  payload      String?
+  executedAt   DateTime @default(now())
 
   automation Automation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+}
+
+model LeadActivity {
+  id        String   @id @default(cuid())
+  leadId    String
+  userId    String
+  type      String
+  content   String
+  createdAt DateTime @default(now())
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Lead {
+  id           String   @id @default(cuid())
+  userId       String
+  name         String
+  email        String?
+  phone        String?
+  company      String?
+  stage        String   @default("NEW")
+  source      String?
+  notes       String   @default("")
+  nextFollowUp DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activities LeadActivity[]
+}
+
+model TeamMember {
+  id        String   @id @default(cuid())
+  userId    String
+  email     String
+  role      String   @default("EDITOR") // ADMIN | EDITOR | VIEWER
+  invitedBy String?
+  token     String?  // magic invite token
+  invitedAt DateTime @default(now())
+  joinedAt  DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ClickToWhatsAppLink {
+  id         String   @id @default(cuid())
+  userId     String
+  name      String
+  phone     String
+  prefillMsg String?
+  utmSource String?
+  utmMedium String?
+  utmCampaign String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model WhatsAppForm {
+  id         String   @id @default(cuid())
+  userId     String
+  name       String
+  phone      String
+  prefillMsg String?
+  questions  String   @default("[]") // [{ question, field, required }]
+  tagName    String?
+  tagValue   String?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  user       User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  submissions WhatsAppFormSubmission[]
+}
+
+model WhatsAppFormSubmission {
+  id        String   @id @default(cuid())
+  formId    String
+  phone     String
+  answers   String   @default("{}") // { field: answer }
+  createdAt DateTime @default(now())
+
+  form WhatsAppForm @relation(fields: [formId], references: [id], onDelete: Cascade)
+}
+
+// Drip messaging: messages scheduled for future delivery
+model DripScheduledMessage {
+  id            String    @id @default(cuid())
+  userId        String
+  contactId     String
+  automationId  String?   // which automation triggered this (optional)
+  channel       String    @default("whatsapp") // whatsapp | email | sms
+  template      String    // message content
+  scheduledFor  DateTime  // when to send
+  status        String    @default("PENDING") // PENDING | SENT | FAILED | CANCELLED
+  sentAt        DateTime?
+  failureReason String?
+  sequenceOrder Int       @default(0) // order within the drip sequence
+  createdAt     DateTime  @default(now())
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contact    Contact    @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  automation Automation? @relation(fields: [automationId], references: [id], onDelete: SetNull)
 }

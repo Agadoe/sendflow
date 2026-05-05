@@ -6,7 +6,7 @@ import toast from 'react-hot-toast';
 export default function CampaignsPage() {
   const [campaigns, setCampaigns] = useState<any[]>([]);
   const [showModal, setShowModal] = useState(false);
-  const [form, setForm] = useState({ name: '', content: '', scheduledAt: '' });
+  const [form, setForm] = useState({ name: '', content: '', scheduledAt: '', recurrence: '' });
   const [creating, setCreating] = useState(false);
   const [sendingCampaign, setSendingCampaign] = useState<string | null>(null);
   const [contactIds, setContactIds] = useState<string[]>([]);
@@ -30,7 +30,7 @@ export default function CampaignsPage() {
       if (res.ok) {
         setCampaigns([data.campaign, ...campaigns]);
         setShowModal(false);
-        setForm({ name: '', content: '', scheduledAt: '' });
+        setForm({ name: '', content: '', scheduledAt: '', recurrence: '' });
         toast.success('Campaign created!');
       } else {
         toast.error(data.error || 'Failed');
@@ -126,30 +126,50 @@ export default function CampaignsPage() {
                   <td className="px-6 py-4 text-sm text-slate">{c._count?.messages || 0}</td>
                   <td className="px-6 py-4 text-xs text-slate-light">{new Date(c.createdAt).toLocaleDateString()}</td>
                   <td className="px-6 py-4">
-                    {c.status === 'DRAFT' && (
+                    <div className="flex items-center gap-2">
+                      {c.status === 'DRAFT' && (
+                        <button
+                          onClick={() => handleSend(c.id)}
+                          disabled={sendingCampaign === c.id}
+                          className="flex items-center gap-1.5 text-sm bg-green-500 hover:bg-green-600 text-white px-3 py-1.5 rounded-btn font-medium transition-colors disabled:opacity-60"
+                        >
+                          {sendingCampaign === c.id ? (
+                            <>
+                              <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                              Sending...
+                            </>
+                          ) : (
+                            <>
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                              </svg>
+                              Send
+                            </>
+                          )}
+                        </button>
+                      )}
                       <button
-                        onClick={() => handleSend(c.id)}
-                        disabled={sendingCampaign === c.id}
-                        className="flex items-center gap-1.5 text-sm bg-green-500 hover:bg-green-600 text-white px-3 py-1.5 rounded-btn font-medium transition-colors disabled:opacity-60"
+                        onClick={async () => {
+                          const res = await fetch(`/api/campaigns/${c.id}/duplicate`, { method: 'POST' });
+                          const data = await res.json();
+                          if (res.ok) {
+                            setCampaigns([data.campaign, ...campaigns]);
+                            toast.success('Campaign duplicated!');
+                          } else {
+                            toast.error(data.error || 'Failed to duplicate');
+                          }
+                        }}
+                        className="flex items-center gap-1.5 text-sm text-slate-light hover:text-slate px-2 py-1.5 rounded-btn hover:bg-gray-100 transition-colors"
+                        title="Duplicate"
                       >
-                        {sendingCampaign === c.id ? (
-                          <>
-                            <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                            Sending...
-                          </>
-                        ) : (
-                          <>
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                            </svg>
-                            Send
-                          </>
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                        {c.status === 'SENT' && (
+                          <span className="text-xs text-green-600 font-medium">✓ Sent</span>
                         )}
                       </button>
-                    )}
-                    {c.status === 'SENT' && (
-                      <span className="text-xs text-green-600 font-medium">✓ Sent</span>
-                    )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -202,6 +222,19 @@ export default function CampaignsPage() {
                   onChange={e => setForm({ ...form, scheduledAt: e.target.value })}
                   className="w-full px-4 py-2.5 rounded-btn border border-gray-200 text-slate focus:outline-none focus:ring-2 focus:ring-amber/40"
                 />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate mb-1.5">Repeat (optional)</label>
+                <select
+                  value={form.recurrence || ''}
+                  onChange={e => setForm({ ...form, recurrence: e.target.value })}
+                  className="w-full px-4 py-2.5 rounded-btn border border-gray-200 text-slate focus:outline-none focus:ring-2 focus:ring-amber/40"
+                >
+                  <option value="">Don't repeat</option>
+                  <option value="DAILY">Daily</option>
+                  <option value="WEEKLY">Weekly</option>
+                  <option value="MONTHLY">Monthly</option>
+                </select>
               </div>
               <div className="bg-amber/5 border border-amber/10 rounded-lg px-4 py-3 text-sm text-slate">
                 <span className="font-semibold">📋 Ready to send to {contactIds.length} contacts</span>

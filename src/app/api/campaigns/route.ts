@@ -32,7 +32,7 @@ export async function POST(req: Request) {
   const userId = getUserIdFromCookie(cookieHeader);
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { name, content, mediaUrl, scheduledAt, contactIds } = await req.json();
+  const { name, content, mediaUrl, scheduledAt, recurrence, contactIds } = await req.json();
   if (!name || !content) {
     return NextResponse.json({ error: 'Name and content required' }, { status: 400 });
   }
@@ -45,6 +45,7 @@ export async function POST(req: Request) {
       mediaUrl: mediaUrl || null,
       status: scheduledAt ? 'SCHEDULED' : 'DRAFT',
       scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
+      recurrence: recurrence || null,
     },
   });
 

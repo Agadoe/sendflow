@@ -22,6 +22,22 @@ export default function EmailPage() {
     });
   }, []);
 
+  async function handleResend(campaignId: string) {
+    toast.loading('Resending to non-openers...', { id: 'resend' });
+    try {
+      const res = await fetch(`/api/email/${campaignId}/resend-non-openers`, { method: 'POST' });
+      toast.dismiss('resend');
+      if (res.ok) toast.success('Resent to non-openers!');
+      else {
+        const data = await res.json();
+        toast.error(data.error || 'Resend failed');
+      }
+    } catch {
+      toast.dismiss('resend');
+      toast.error('Network error');
+    }
+  }
+
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
     if (!form.campaignName || !form.subject || !form.content || !form.audienceId) return;
@@ -98,18 +114,29 @@ export default function EmailPage() {
                 <th className="text-left px-6 py-3 text-xs font-semibold text-slate-light uppercase tracking-wider">Status</th>
                 <th className="text-left px-6 py-3 text-xs font-semibold text-slate-light uppercase tracking-wider">Opens</th>
                 <th className="text-left px-6 py-3 text-xs font-semibold text-slate-light uppercase tracking-wider">Clicks</th>
+                <th className="text-left px-6 py-3 text-xs font-semibold text-slate-light uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {campaigns.map((c: any) => (
                 <tr key={c.id} className="hover:bg-gray-50/50 transition-colors">
-                  <td className="px-6 py-4 text-sm font-medium text-slate">{c.settings?.title || c.title || '—'}</td>
-                  <td className="px-6 py-4 text-sm text-slate-light">{c.settings?.subject_line || '—'}</td>
+                  <td className="px-6 py-4 text-sm font-medium text-slate">{c.name || '—'}</td>
+                  <td className="px-6 py-4 text-sm text-slate-light">{c.subject || '—'}</td>
                   <td className="px-6 py-4">
                     <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusColor(c.status)}`}>{c.status || 'draft'}</span>
                   </td>
-                  <td className="px-6 py-4 text-sm text-slate">{c.report_summary?.opens ? `${Math.round(c.report_summary.open_rate * 100)}%` : '—'}</td>
-                  <td className="px-6 py-4 text-sm text-slate">{c.report_summary?.clicks ? `${Math.round(c.report_summary.click_rate * 100)}%` : '—'}</td>
+                  <td className="px-6 py-4 text-sm text-slate">{c.opens != null ? `${c.opens}%` : '—'}</td>
+                  <td className="px-6 py-4 text-sm text-slate">{c.clicks != null ? `${c.clicks}%` : '—'}</td>
+                  <td className="px-6 py-4">
+                    <button
+                      onClick={() => handleResend(c.id)}
+                      className="text-xs px-3 py-1.5 rounded-full border border-amber/30 text-amber hover:bg-amber/10 font-medium transition-colors disabled:opacity-50"
+                      disabled={c.status !== 'sent'}
+                      title="Resend to non-openers"
+                    >
+                      Resend ↻
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>

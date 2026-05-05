@@ -23,11 +23,30 @@ export async function GET(req: Request) {
     include: { _count: { select: { messages: true } }, messages: true },
   });
 
-  const whatsapp = {
-    sent: campaigns.reduce((acc, c) => acc + (c._count?.messages || 0), 0),
-    delivered: campaigns.reduce((acc, c) => acc + c.messages.filter((m: any) => m.status === 'DELIVERED').length, 0),
-    campaigns: campaigns.length,
+  const total = campaigns.reduce((acc, c) => acc + (c._count?.messages || 0), 0);
+  const delivered = campaigns.reduce((acc, c) => acc + c.messages.filter((m: any) => m.status === 'DELIVERED').length, 0);
+  const failed = campaigns.reduce((acc, c) => acc + c.messages.filter((m: any) => m.status === 'FAILED').length, 0);
+
+  const stats = {
+    total,
+    delivered,
+    failed,
+    rate: total > 0 ? Math.round((delivered / total) * 100) : 0,
   };
+
+  const campaignStats = campaigns.map((c: any) => {
+    const sent = c.messages.length;
+    const d = c.messages.filter((m: any) => m.status === 'DELIVERED').length;
+    const f = c.messages.filter((m: any) => m.status === 'FAILED').length;
+    return {
+      id: c.id,
+      name: c.name,
+      sent,
+      delivered: d,
+      failed: f,
+      rate: sent > 0 ? Math.round((d / sent) * 100) : 0,
+    };
+  });
 
   // Email stats from Mailchimp
   const email = { sent: 0, openRate: 0, clickRate: 0 };
@@ -59,5 +78,5 @@ export async function GET(req: Request) {
   // SMS stats placeholder (Termii doesn't have a simple list endpoint without a plan)
   const sms = { sent: 0, delivered: 0 };
 
-  return NextResponse.json({ whatsapp, email, sms });
+  return NextResponse.json({ stats, campaigns: campaignStats, whatsapp: { sent: total, delivered, failed, campaigns: campaigns.length }, email, sms });
 }
