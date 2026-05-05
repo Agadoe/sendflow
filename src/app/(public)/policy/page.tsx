@@ -56,12 +56,12 @@ export default function PolicyPage() {
 
         <section className="space-y-4">
           <h2 className="font-heading text-xl text-slate">Your rights</h2>
-          <p className="text-slate-light leading-relaxed">You can ask us to export or delete your data at any time. Email us at <strong>support@sendflow.app</strong> with your request. We process data requests within 5 business days.</p>
+          <p className="text-slate-light leading-relaxed">You can ask us to export or delete your data at any time. Email us at <strong>sendflow@baahe.org</strong> with your request. We process data requests within 5 business days.</p>
         </section>
 
         <section className="space-y-4">
           <h2 className="font-heading text-xl text-slate">Contact us</h2>
-          <p className="text-slate-light leading-relaxed">Questions about this policy? Email <strong>support@sendflow.app</strong>.</p>
+          <p className="text-slate-light leading-relaxed">Questions about this policy? Email <strong>sendflow@baahe.org</strong>.</p>
         </section>
 
         <hr className="border-gray-100" />
@@ -72,7 +72,7 @@ export default function PolicyPage() {
           <p className="text-sm text-slate-light">Last updated: May 2026</p>
 
           <h3 className="font-heading text-lg text-slate mt-6">Eligibility for refunds</h3>
-          <p className="text-slate-light leading-relaxed">SendFlow offers refunds within <strong>7 days</strong> of your first payment if you are not satisfied with the service. To request a refund, email <strong>support@sendflow.app</strong> with your account email and reason for requesting a refund.</p>
+          <p className="text-slate-light leading-relaxed">SendFlow offers refunds within <strong>7 days</strong> of your first payment if you are not satisfied with the service. To request a refund, email <strong>sendflow@baahe.org</strong> with your account email and reason for requesting a refund.</p>
 
           <h3 className="font-heading text-lg text-slate mt-6">What is not refundable</h3>
           <ul className="space-y-2 text-slate-light list-disc pl-5">
@@ -86,7 +86,7 @@ export default function PolicyPage() {
           <p className="text-slate-light leading-relaxed">Approved refunds are processed back to the original payment method (MTN Mobile Money or card) within <strong>5–10 business days</strong>. You will receive a confirmation email once the refund is initiated.</p>
 
           <h3 className="font-heading text-lg text-slate mt-6">Request a refund</h3>
-          <p className="text-slate-light leading-relaxed">Email <strong>support@sendflow.app</strong> with:</p>
+          <p className="text-slate-light leading-relaxed">Email <strong>sendflow@baahe.org</strong> with:</p>
           <ul className="space-y-2 text-slate-light list-disc pl-5">
             <li>Your registered email address</li>
             <li>The plan or amount you paid</li>
@@ -115,7 +115,7 @@ export default function PolicyPage() {
           <p className="text-slate-light leading-relaxed">You are responsible for keeping your login details secure. SendFlow is not liable for unauthorized access to your account if your credentials were compromised.</p>
 
           <h3 className="font-heading text-lg text-slate mt-6">Contact</h3>
-          <p className="text-slate-light leading-relaxed">Questions about these terms? Email <strong>support@sendflow.app</strong>.</p>
+          <p className="text-slate-light leading-relaxed">Questions about these terms? Email <strong>sendflow@baahe.org</strong>.</p>
         </section>
       </div>
 

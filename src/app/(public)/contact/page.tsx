@@ -66,7 +66,7 @@ export default function ContactPage() {
               </svg>
             </div>
             <div className="text-xs text-slate-light uppercase tracking-wider font-semibold mb-1">Email</div>
-            <a href="mailto:support@sendflow.app" className="text-slate font-medium hover:text-amber transition-colors">support@sendflow.app</a>
+            <a href="mailto:sendflow@baahe.org" className="text-slate font-medium hover:text-amber transition-colors">sendflow@baahe.org</a>
             <div className="text-xs text-slate-light mt-1">Best for general enquiries &amp; billing</div>
           </div>
 
