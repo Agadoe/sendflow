@@ -127,8 +127,8 @@ export default function HomePage() {
             <span className="text-amber">From $29/month</span>
           </h1>
           <p className="text-lg text-slate-light md:text-xl max-w-2xl mx-auto mb-10 animate-fade-up" style={{ animationDelay: '160ms' }}>
-            Reach thousands of customers instantly. Reliable delivery. Real-time reports.
-            The affordable marketing tool African businesses have been waiting for.
+            Reach thousands of customers instantly. Schedule campaigns, automate follow-ups with drip sequences,
+            and track every message — from one dashboard.
           </p>
 
           {!submitted ? (
@@ -240,7 +240,7 @@ export default function HomePage() {
         <div className="max-w-4xl mx-auto flex flex-wrap items-center justify-center gap-8 text-center">
           {[
             { num: '200+', label: 'Businesses on waitlist' },
-            { num: '50K+', label: 'Messages ready to send' },
+            { num: '10+', label: 'Features shipped' },
             { num: '3', label: 'Countries at launch' },
             { num: '99.9%', label: 'Uptime target' },
           ].map(({ num, label }) => (
@@ -290,9 +290,9 @@ export default function HomePage() {
           </div>
           <div className="grid md:grid-cols-3 gap-8">
             {[
-              { step: '01', title: 'Import your contacts', desc: 'Upload a CSV or Excel file. We\'ll auto-detect columns for names and phone numbers. Organize with tags.', icon: '📁' },
-              { step: '02', title: 'Compose your message', desc: 'Write your promotion, add an image or document, preview exactly how it looks on WhatsApp.', icon: '✍️' },
-              { step: '03', title: 'Send or schedule', desc: 'Send immediately or pick a time. Watch delivery reports come in real-time as customers receive your message.', icon: '🚀' },
+              { step: '01', title: 'Import your contacts', desc: 'Upload a CSV or Excel file. We\'ll auto-detect columns for names and phone numbers. Tag and segment them by anything.', icon: '📁' },
+              { step: '02', title: 'Build your campaign', desc: 'Write your message, set it to send now or schedule it. Add media, UTM tracking, and automation rules.', icon: '✍️' },
+              { step: '03', title: 'Send, track & automate', desc: 'Watch delivery reports in real-time. Set up drip sequences that fire automatically. Invite your team.', icon: '🚀' },
             ].map(({ step, title, desc, icon }) => (
               <div key={step} className="bg-surface rounded-card p-8 shadow-sm border border-gray-100 hover:shadow-lg hover:-translate-y-1 transition-all duration-200">
                 <div className="text-4xl mb-4">{icon}</div>
@@ -315,11 +315,14 @@ export default function HomePage() {
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {[
               { title: 'Bulk Message Broadcast', desc: 'Send to 10 or 10,000 contacts with one click. No rate limiting headaches.', icon: '📨' },
+              { title: 'Drip Message Sequences', desc: 'Build multi-step campaigns that fire automatically over days or weeks. Tag-based triggers, delays, and follow-ups.', icon: '⏰' },
+              { title: 'Click-to-WhatsApp Ads', desc: 'Generate tracked links for Facebook, Instagram, and Google ads. See exactly which ad drives conversations.', icon: '🔗' },
+              { title: 'WhatsApp Lead Forms', desc: 'Embed native lead capture forms anywhere. Visitors answer questions and land straight in your WhatsApp chat.', icon: '📋' },
               { title: 'Media Attachments', desc: 'Include images, PDFs, or documents. Perfect for catalogs, menus, or flyers.', icon: '🖼️' },
-              { title: 'Delivery Reports', desc: 'See exactly who received your message, who opened it, and who didn\'t.', icon: '📊' },
-              { title: 'Schedule Messages', desc: 'Write your promotions at night, schedule for 8am, and watch them go out automatically.', icon: '⏰' },
-              { title: 'CSV Import', desc: 'Upload your contact list in seconds. Auto-detect headers. Map columns visually.', icon: '📋' },
-              { title: 'Multiple WhatsApp Numbers', desc: 'Manage several businesses or brands from one dashboard.', icon: '📱' },
+              { title: 'Delivery Reports', desc: 'See exactly who received your message, who opened it, and who didn\'t — per campaign and overall.', icon: '📊' },
+              { title: 'Contact Segmentation', desc: 'Tag contacts and filter by behavior. Send the right message to the right group every time.', icon: '🏷️' },
+              { title: 'Recurring Campaigns', desc: 'Set it once — daily, weekly, or monthly. Your campaign re-sends automatically on schedule.', icon: '🔄' },
+              { title: 'Team Roles & Access', desc: 'Invite editors and viewers. Control who can send, edit, or just view reports.', icon: '👥' },
             ].map(({ title, desc, icon }) => (
               <div key={title} className="p-6 bg-cream rounded-card border border-amber/5 hover:shadow-md transition-shadow">
                 <div className="text-3xl mb-3">{icon}</div>
