@@ -443,6 +443,9 @@ export default function HomePage() {
             <div className="w-6 h-6 rounded bg-amber flex items-center justify-center text-white text-xs font-bold">S</div>
             <span className="text-white font-heading">SendFlow</span>
           </div>
+          <div className="flex gap-4 text-sm">
+            <a href="/policy" className="text-gray-400 hover:text-white transition-colors">Privacy &amp; Refund Policy</a>
+          </div>
           <div className="text-sm">© 2026 SendFlow. Built for African businesses 🇬🇭</div>
         </div>
       </footer>
