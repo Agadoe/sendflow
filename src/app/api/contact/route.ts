@@ -9,20 +9,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Name, email and message are required' }, { status: 400 });
     }
 
-    // Store the message in DB (or forward via email)
-    await prisma.lead.create({
-      data: {
-        name,
-        email,
-        phone: phone || null,
-        source: 'contact_form',
-        status: subject || 'NEW',
-        notes: `[${subject || 'general'}] ${message}`,
-      },
-    });
-
-    // TODO: forward to support email via Resend/SendGrid
-    // For now, log it
+    // Log the message — public contact form has no authenticated user
     console.log(`[contact] ${name} <${email}> [${subject}]: ${message}`);
 
     return NextResponse.json({ success: true });

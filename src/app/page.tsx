@@ -111,8 +111,11 @@ export default function HomePage() {
           <a href="/contact" className="text-sm font-medium text-slate hover:text-amber transition-colors">
             Contact
           </a>
-          <a href="#pricing" className="text-sm font-medium text-slate hover:text-amber transition-colors">
+          <a href="/#pricing" className="text-sm font-medium text-slate hover:text-amber transition-colors">
             View Pricing
+          </a>
+          <a href="/login" className="text-sm font-semibold text-amber hover:text-amber-dark transition-colors">
+            Sign In
           </a>
         </div>
       </nav>
@@ -271,7 +274,7 @@ export default function HomePage() {
             {[
               { emoji: '😩', text: 'Sending promotions one by one takes hours' },
               { emoji: '📵', text: 'No way to track who received your message' },
-              { emoji: '💸', text: 'Enterprise tools cost GHS 1,500+/month' },,
+              { emoji: '💸', text: 'Enterprise tools cost GHS 1,500+/month' },
               { emoji: '📋', text: 'Contacts scattered across phone, paper, memory' },
             ].map(({ emoji, text }) => (
               <div key={text} className="flex items-start gap-4 p-4 bg-cream rounded-card border border-amber/5">

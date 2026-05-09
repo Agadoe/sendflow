@@ -16,7 +16,7 @@ model User {
   plan          String    @default("FREE")
   passwordHash  String?
   emailVerified DateTime? @default(now())
-  isOwner       Boolean   @default(false) // true for the account creator / primary user
+  isOwner       Boolean   @default(false)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 

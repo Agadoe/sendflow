@@ -1,14 +1,9 @@
-import { Metadata } from 'next';
+'use client';
 import toast, { Toaster } from 'react-hot-toast';
-
-export const metadata: Metadata = {
-  title: 'Contact Us — SendFlow',
-  description: 'Get in touch with the SendFlow team.',
-};
 
 export default function ContactPage() {
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.prevent.default();
+    e.preventDefault();
     const form = e.currentTarget;
     const data = new FormData(form);
 
@@ -111,30 +106,30 @@ export default function ContactPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate mb-1.5">Your name *</label>
-                <input name="name" type="text" placeholder="Akua Mensah" required className="w-full px-4 py-2.5 rounded-btn border border-gray-200 text-slate placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber/40" />
+              <label className="block text-sm font-medium text-slate mb-1.5">Your name *</label>
+              <input name="name" type="text" placeholder="Akua Mensah" required className="w-full px-4 py-2.5 rounded-btn border border-gray-200 text-slate placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber/40" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate mb-1.5">Email address *</label>
-                <input name="email" type="email" placeholder="akua@business.com" required className="w-full px-4 py-2.5 rounded-btn border border-gray-200 text-slate placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber/40" />
+              <label className="block text-sm font-medium text-slate mb-1.5">Email address *</label>
+              <input name="email" type="email" placeholder="akua@business.com" required className="w-full px-4 py-2.5 rounded-btn border border-gray-200 text-slate placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber/40" />
               </div>
             </div>
             <div className="grid sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate mb-1.5">Phone (optional)</label>
-                <input name="phone" type="tel" placeholder="+233 24 000 0000" className="w-full px-4 py-2.5 rounded-btn border border-gray-200 text-slate placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber/40" />
+              <label className="block text-sm font-medium text-slate mb-1.5">Phone (optional)</label>
+              <input name="phone" type="tel" placeholder="+233 24 000 0000" className="w-full px-4 py-2.5 rounded-btn border border-gray-200 text-slate placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber/40" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate mb-1.5">Subject *</label>
-                <select name="subject" required className="w-full px-4 py-2.5 rounded-btn border border-gray-200 text-slate focus:outline-none focus:ring-2 focus:ring-amber/40">
-                  <option value="">Select a topic</option>
-                  <option value="billing">Billing &amp; Payments</option>
-                  <option value="technical">Technical Issue</option>
-                  <option value="sales">Pricing &amp; Plans</option>
-                  <option value="onboarding">Getting Started</option>
-                  <option value="partnership">Partnership</option>
-                  <option value="other">Other</option>
-                </select>
+              <label className="block text-sm font-medium text-slate mb-1.5">Subject *</label>
+              <select name="subject" required className="w-full px-4 py-2.5 rounded-btn border border-gray-200 text-slate focus:outline-none focus:ring-2 focus:ring-amber/40">
+                <option value="">Select a topic</option>
+                <option value="billing">Billing &amp; Payments</option>
+                <option value="technical">Technical Issue</option>
+                <option value="sales">Pricing &amp; Plans</option>
+                <option value="onboarding">Getting Started</option>
+                <option value="partnership">Partnership</option>
+                <option value="other">Other</option>
+              </select>
               </div>
             </div>
             <div>
