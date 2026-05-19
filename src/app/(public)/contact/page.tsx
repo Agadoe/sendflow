@@ -72,7 +72,7 @@ export default function ContactPage() {
               </svg>
             </div>
             <div className="text-xs text-slate-light uppercase tracking-wider font-semibold mb-1">Phone / WhatsApp</div>
-            <a href="tel:+233501234567" className="text-slate font-medium hover:text-amber transition-colors">+233 50 123 4567</a>
+            <a href="tel:+233540497649" className="text-slate font-medium hover:text-amber transition-colors">+233 54 049 7649</a>
             <div className="text-xs text-slate-light mt-1">Mon–Fri, 9am–5pm GMT</div>
           </div>
 
