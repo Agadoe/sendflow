@@ -1,6 +1,26 @@
 import { NextResponse } from 'next/server';
-import { execSync } from 'child_process';
 import { prisma } from '@/lib/prisma';
+
+const DAEMON_URL = process.env.WACLI_DAEMON_URL || 'http://127.0.0.1:4555';
+
+function formatPhone(phone: string): string {
+  const clean = (phone || '').replace(/\D/g, '');
+  if (clean.startsWith('0')) return `+233${clean.slice(1)}`;
+  if (clean.startsWith('233')) return `+${clean}`;
+  return `+233${clean}`;
+}
+
+async function sendViaDaemon(phone: string, message: string): Promise<void> {
+  const res = await fetch(`${DAEMON_URL}/send`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ phone, message }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Unknown error' }));
+    throw new Error(err.error || `Daemon returned ${res.status}`);
+  }
+}
 
 export async function POST(req: Request) {
   const cookieHeader = req.headers.get('cookie');
@@ -17,32 +37,22 @@ export async function POST(req: Request) {
 
   if (!campaign) return NextResponse.json({ error: 'Campaign not found' }, { status: 404 });
 
-  // Update campaign status
+  // Mark in-progress before starting (so we can recover if crash)
   await prisma.campaign.update({
     where: { id: campaignId },
     data: { status: 'SENDING', sentAt: new Date() },
   });
 
-  let sent = 0;
-  let failed = 0;
+  let sent = 0, failed = 0;
 
   for (const msg of campaign.messages) {
     try {
-      const contact = msg.contact;
-      const phone = contact.phone.startsWith('0')
-        ? `233${contact.phone.slice(1)}`
-        : contact.phone;
-
-      const cmd = `wacli send --phone ${phone} --message "${campaign.content.replace(/"/g, '\\"')}"`;
-      execSync(cmd, { timeout: 15000 });
-
+      const formatted = formatPhone(msg.contact.phone);
+      await sendViaDaemon(formatted, campaign.content);
       await prisma.message.update({ where: { id: msg.id }, data: { status: 'SENT', sentAt: new Date() } });
       sent++;
-    } catch {
-      await prisma.message.update({
-        where: { id: msg.id },
-        data: { status: 'FAILED', failureReason: 'Send failed' },
-      });
+    } catch (e: any) {
+      await prisma.message.update({ where: { id: msg.id }, data: { status: 'FAILED', failureReason: e.message } });
       failed++;
     }
   }

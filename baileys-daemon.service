@@ -1,0 +1,18 @@
+[Unit]
+Description=SendFlow Baileys WhatsApp Daemon
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/baileys-wacli
+ExecStart=/usr/bin/node /home/ubuntu/baileys-daemon.js
+Restart=on-failure
+RestartSec=10
+StandardOutput=append:/home/ubuntu/baileys-daemon.log
+StandardError=append:/home/ubuntu/baileys-daemon-error.log
+Environment=WACLI_PORT=4555
+
+[Install]
+WantedBy=multi-user.target

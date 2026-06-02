@@ -8,7 +8,7 @@ export async function GET(req: NextRequest) {
     const session = await requireRole(req, 'ADMIN');
     const keys = await prisma.apiKey.findMany({
       where: { userId: session.id },
-      select: { id: true, name: true, lastUsed: true, createdAt: true },
+      select: { id: true, key: true, lastUsed: true, createdAt: true },
       orderBy: { createdAt: 'desc' },
     });
     return NextResponse.json({ keys });

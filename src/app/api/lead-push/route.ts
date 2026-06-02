@@ -28,7 +28,7 @@ async function validateKey(rawKey: string): Promise<string | null> {
 // POST /api/leads/ingest — batch create leads from LEADOPS agents
 // Auth: X-SENDFLOW-KEY header
 export async function POST(req: NextRequest) {
-  const rawKey = req.headers.get('x-sendflow-key');
+  const rawKey = req.headers.get('x-sendflow-key') || '';
   const userId = await validateKey(rawKey);
   if (!userId) {
     return NextResponse.json({ error: 'Invalid or missing API key' }, { status: 401 });
@@ -120,9 +120,9 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// GET /api/leads/ingest — check API key validity and account info
+// GET /api/lead-push — check API key validity and account info
 export async function GET(req: NextRequest) {
-  const rawKey = req.headers.get('x-sendflow-key');
+  const rawKey = req.headers.get('x-sendflow-key') || '';
   const userId = await validateKey(rawKey);
   if (!userId) {
     return NextResponse.json({ error: 'Invalid or missing API key' }, { status: 401 });

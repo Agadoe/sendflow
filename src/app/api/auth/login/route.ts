@@ -24,7 +24,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
     }
 
-    const token = await new SignJWT({ sub: user.id, email: user.email, name: user.name, plan: user.plan })
+    const token = await new SignJWT({ sub: user.id, email: user.email, name: user.name, plan: user.plan, role: user.role })
       .setProtectedHeader({ alg: 'HS256' })
       .setIssuedAt()
       .setExpirationTime('7d')
@@ -32,7 +32,7 @@ export async function POST(req: Request) {
 
     const cookie = `sf_token=${token}; HttpOnly; Path=/; Max-Age=${7 * 24 * 60 * 60}; SameSite=Lax`;
     return NextResponse.json(
-      { user: { id: user.id, email: user.email, name: user.name, plan: user.plan } },
+      { user: { id: user.id, email: user.email, name: user.name, plan: user.plan, role: user.role } },
       { headers: { 'Set-Cookie': cookie } }
     );
   } catch (err) {
