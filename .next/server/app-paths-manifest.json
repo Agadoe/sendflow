@@ -1,13 +1,3 @@
 {
-  "/api/auth/login/route": "app/api/auth/login/route.js",
-  "/api/auth/me/route": "app/api/auth/me/route.js",
-  "/api/clients/route": "app/api/clients/route.js",
-  "/api/client-auth/login/route": "app/api/client-auth/login/route.js",
-  "/api/client-portal/leads/route": "app/api/client-portal/leads/route.js",
-  "/client-portal/page": "app/client-portal/page.js",
-  "/client-portal/leads/page": "app/client-portal/leads/page.js",
-  "/client-portal/campaigns/page": "app/client-portal/campaigns/page.js",
-  "/client-portal/reports/page": "app/client-portal/reports/page.js",
-  "/client-portal/settings/page": "app/client-portal/settings/page.js",
-  "/dashboard/clients/page": "app/dashboard/clients/page.js"
+  "/page": "app/page.js"
 }

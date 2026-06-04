@@ -28,7 +28,10 @@ export default function HomePage() {
 
   async function handleWaitlist(e: React.FormEvent) {
     e.preventDefault();
-    if (!name || !email) return;
+    if (!name || !email || !phone) {
+      toast.error('Name, email, and phone are required.');
+      return;
+    }
     setLoading(true);
     try {
       const res = await fetch('/api/waitlist', {
@@ -39,7 +42,8 @@ export default function HomePage() {
       if (res.ok) {
         setSubmitted(true);
       } else {
-        toast.error('Something went wrong. Try again.');
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || 'Something went wrong. Try again.');
       }
     } catch {
       toast.error('Network error. Check your connection.');
@@ -157,13 +161,25 @@ export default function HomePage() {
                 />
               </div>
               <div className="flex flex-col sm:flex-row gap-3">
-                <input
-                  type="tel"
-                  placeholder="Phone (optional)"
-                  value={phone}
-                  onChange={e => setPhone(e.target.value)}
-                  className="flex-1 px-4 py-3 rounded-btn border border-gray-200 text-slate placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber/40"
-                />
+                <div className="flex-1">
+                  <div className="flex gap-2">
+                    <span className="inline-flex items-center px-3 rounded-l-btn border border-r-0 border-gray-200 bg-gray-50 text-slate-light text-sm">+233</span>
+                    <input
+                      type="tel"
+                      placeholder="24 123 4567"
+                      value={phone.replace(/^\+?233/, '')}
+                      onChange={e => {
+                        const digits = e.target.value.replace(/[^\d]/g, '');
+                        setPhone('+233' + digits);
+                      }}
+                      className="flex-1 px-4 py-3 rounded-r-btn border border-gray-200 text-slate placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber/40"
+                      required
+                      minLength={9}
+                      maxLength={15}
+                    />
+                  </div>
+                  <p className="text-xs text-slate-light mt-1 px-1">WhatsApp number required — we&apos;ll text you when SendFlow launches.</p>
+                </div>
                 <select
                   value={businessType}
                   onChange={e => setBusinessType(e.target.value)}

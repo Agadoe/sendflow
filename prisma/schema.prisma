@@ -137,6 +137,40 @@ model Waitlist {
   phone        String?
   wantsCall    Boolean  @default(false)
   createdAt    DateTime @default(now())
+
+  submissions WaitlistSubmission[]
+}
+
+// Permanent submission audit log — survives Mailchimp failures and lets us
+// backfill or re-sync without losing data. Email + phone uniqueness is
+// enforced at the application layer because the same person may submit with
+// different emails but the same phone (or vice versa).
+model WaitlistSubmission {
+  id            String   @id @default(cuid())
+  waitlistId    String?
+  email         String
+  name          String
+  phone         String
+  phoneE164     String
+  businessType  String?
+  wantsCall     Boolean  @default(false)
+  source        String   @default("landing") // landing | telegram | api
+  ip            String?
+  userAgent     String?
+  // Sync status across destinations
+  mailchimpStatus   String  @default("pending") // pending | synced | failed
+  mailchimpError    String?
+  mailchimpSyncedAt DateTime?
+  telegramStatus    String  @default("pending") // pending | synced | failed | skipped
+  telegramError     String?
+  telegramSyncedAt  DateTime?
+  createdAt         DateTime @default(now())
+
+  waitlist Waitlist? @relation(fields: [waitlistId], references: [id], onDelete: SetNull)
+
+  @@index([email])
+  @@index([phone])
+  @@index([createdAt])
 }
 
 model ApiKey {
