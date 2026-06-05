@@ -412,7 +412,7 @@ export default function HomePage() {
                     ))}
                   </ul>
                   <a
-                    href="#waitlist"
+                    href={`/subscribe?plan=${plan.name.toUpperCase()}`}
                     className={`block text-center py-2.5 rounded-btn text-sm font-semibold transition-all ${plan.popular ? 'bg-amber hover:bg-amber-dark text-white' : 'bg-gray-100 hover:bg-gray-200 text-slate'}`}
                   >
                     {plan.price === 0 ? 'Start Free' : 'Get Started'}
