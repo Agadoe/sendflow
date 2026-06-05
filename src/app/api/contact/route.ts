@@ -8,6 +8,9 @@ const TO_EMAIL = 'Kaizensalesconsult@gmail.com';
 const FROM_EMAIL = 'noreply@sendflow.africa';
 const FROM_NAME = 'SendFlow Contact Form';
 
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const TELEGRAM_NOTIFY_CHAT = process.env.TELEGRAM_NOTIFY_CHAT;
+
 const transporter = nodemailer.createTransport({
   host: 'smtp.gmail.com',
   port: 587,
