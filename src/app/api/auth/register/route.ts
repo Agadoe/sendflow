@@ -2,12 +2,31 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 import { SignJWT } from 'jose';
+import { checkRateLimit, clientKey } from '@/lib/rate-limit';
 
 const JWT_SECRET = new TextEncoder().encode(
   process.env.NEXTAUTH_SECRET || 'development-secret'
 );
 
+// 3 signups per 10 min per IP — bots shouldn't be mass-creating accounts.
+// Legitimate users can retry in 10 min; bots give up.
+const LIMIT = { max: 3, windowSec: 600 };
+
 export async function POST(req: Request) {
+  const limit = checkRateLimit(clientKey(req, 'auth:register'), LIMIT);
+  if (!limit.ok) {
+    return NextResponse.json(
+      { error: 'Too many registration attempts. Try again in 10 minutes.' },
+      {
+        status: 429,
+        headers: {
+          'Retry-After': String(limit.resetInSec),
+          'X-RateLimit-Remaining': '0',
+        },
+      }
+    );
+  }
+
   try {
     const { name, email, password } = await req.json();
     if (!email || !name || !password) {
