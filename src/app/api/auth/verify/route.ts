@@ -3,7 +3,7 @@ import { jwtVerify, SignJWT } from 'jose';
 import { prisma } from '@/lib/prisma';
 
 const JWT_SECRET = new TextEncoder().encode(
-  process.env.NEXTAUTH_SECRET || 'development-secret'
+  process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET || 'development-secret'
 );
 
 export async function GET(req: Request) {

@@ -4,7 +4,7 @@ import { jwtVerify } from 'jose';
 import Link from 'next/link';
 
 const JWT_SECRET = new TextEncoder().encode(
-  process.env.NEXTAUTH_SECRET || 'development-secret'
+  process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET || 'development-secret'
 );
 
 function formatDate(date: Date) {

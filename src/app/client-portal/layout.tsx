@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import { jwtVerify } from 'jose';
 
 const JWT_SECRET = new TextEncoder().encode(
-  process.env.NEXTAUTH_SECRET || 'development-secret'
+  process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET || 'development-secret'
 );
 
 export default async function ClientPortalLayout({

@@ -5,7 +5,7 @@ import { SignJWT } from 'jose';
 import { checkRateLimit, clientKey } from '@/lib/rate-limit';
 
 const JWT_SECRET = new TextEncoder().encode(
-  process.env.NEXTAUTH_SECRET || 'development-secret'
+  process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET || 'development-secret'
 );
 
 // 5 attempts per minute per IP — slows credential-stuffing without

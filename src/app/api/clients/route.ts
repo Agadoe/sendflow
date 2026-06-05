@@ -6,7 +6,7 @@ import bcrypt from 'bcryptjs';
 import { SignJWT } from 'jose';
 
 const JWT_SECRET = new TextEncoder().encode(
-  process.env.NEXTAUTH_SECRET || 'development-secret'
+  process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET || 'development-secret'
 );
 
 function generateTempPassword(): string {

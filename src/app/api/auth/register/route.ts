@@ -5,7 +5,7 @@ import { SignJWT } from 'jose';
 import { checkRateLimit, clientKey } from '@/lib/rate-limit';
 
 const JWT_SECRET = new TextEncoder().encode(
-  process.env.NEXTAUTH_SECRET || 'development-secret'
+  process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET || 'development-secret'
 );
 
 // 3 signups per 10 min per IP — bots shouldn't be mass-creating accounts.
