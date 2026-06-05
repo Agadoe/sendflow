@@ -1,11 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import toast, { Toaster } from 'react-hot-toast';
 
-export default function VerifyPage() {
+function VerifyContent() {
   const router = useRouter();
   const params = useSearchParams();
   const reference = params.get('reference') || params.get('trxref');
@@ -30,7 +30,6 @@ export default function VerifyPage() {
         setStatus('success');
         setMessage('Payment successful! Your plan will activate within a few seconds.');
         setPlan(data.plan);
-        // Poll once after 3s in case webhook hasn't fired yet
         setTimeout(() => router.push('/dashboard'), 4000);
       } else if (data.status === 'pending') {
         setStatus('pending');
@@ -108,5 +107,17 @@ export default function VerifyPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function VerifyPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="w-12 h-12 border-4 border-amber border-t-transparent rounded-full animate-spin" />
+      </div>
+    }>
+      <VerifyContent />
+    </Suspense>
   );
 }

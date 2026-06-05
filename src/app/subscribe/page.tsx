@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import toast, { Toaster } from 'react-hot-toast';
 
@@ -12,17 +12,20 @@ interface Plan {
   popular?: boolean;
 }
 
-export default function SubscribePage() {
+function SubscribeContent() {
   const router = useRouter();
   const params = useSearchParams();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState<string | null>(null);
   const [user, setUser] = useState<{ email: string; plan: string } | null>(null);
+  const [highlightPlan, setHighlightPlan] = useState<string | null>(null);
 
   useEffect(() => {
     fetchPlans();
     fetchUser();
-  }, []);
+    const requestedPlan = params.get('plan');
+    if (requestedPlan) setHighlightPlan(requestedPlan.toUpperCase());
+  }, [params]);
 
   async function fetchPlans() {
     const res = await fetch('/api/paystack/plans');
@@ -51,7 +54,6 @@ export default function SubscribePage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to start payment');
-      // Redirect to Paystack hosted checkout
       window.location.href = data.authorizationUrl;
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed';
@@ -87,11 +89,12 @@ export default function SubscribePage() {
         <div className="grid md:grid-cols-3 gap-6">
           {plans.map(plan => {
             const isCurrent = user?.plan === plan.code;
+            const isHighlighted = highlightPlan === plan.code;
             return (
               <div
                 key={plan.code}
                 className={`relative rounded-2xl p-8 ${
-                  plan.popular
+                  plan.popular || isHighlighted
                     ? 'bg-amber/5 border-2 border-amber shadow-xl'
                     : 'bg-white border border-slate-200'
                 }`}
@@ -143,5 +146,17 @@ export default function SubscribePage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function SubscribePage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="w-12 h-12 border-4 border-amber border-t-transparent rounded-full animate-spin" />
+      </div>
+    }>
+      <SubscribeContent />
+    </Suspense>
   );
 }
