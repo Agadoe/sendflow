@@ -149,6 +149,46 @@ export async function POST(req: NextRequest) {
       // Still return success to the user — message is saved, can be re-sent from dashboard.
     }
 
+    // 3) Telegram fallback notification. If SMTP fails, this still gets the
+    //    message to Don via Telegram (the waitlist endpoint already does this).
+    if (TELEGRAM_BOT_TOKEN && TELEGRAM_NOTIFY_CHAT) {
+      try {
+        const telegramText = [
+          '📨 *SendFlow Contact*',
+          '',
+          `👤 *${contact.name}*`,
+          `📧 ${contact.email}`,
+          contact.phone ? `📱 ${contact.phone}` : null,
+          `📋 ${contact.subject || '(no subject)'}`,
+          '',
+          contact.message,
+          '',
+          `[View in dashboard](https://sendflow-two.vercel.app/dashboard/messages)`,
+        ].filter(Boolean).join('\n');
+
+        const tgRes = await fetch(
+          `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: TELEGRAM_NOTIFY_CHAT,
+              text: telegramText,
+              parse_mode: 'Markdown',
+              disable_web_page_preview: true,
+            }),
+          }
+        );
+        if (!tgRes.ok) {
+          const err = await tgRes.json().catch(() => ({}));
+          console.warn('[contact] Telegram notify failed:', JSON.stringify(err).slice(0, 200));
+        }
+      } catch (tgErr) {
+        // Telegram failure is non-fatal — DB has the message.
+        console.warn('[contact] Telegram notify error:', tgErr);
+      }
+    }
+
     return NextResponse.json({
       success: true,
       id: contact.id,
