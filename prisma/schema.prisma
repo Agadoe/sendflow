@@ -315,3 +315,25 @@ model DripScheduledMessage {
   contact    Contact    @relation(fields: [contactId], references: [id], onDelete: Cascade)
   automation Automation? @relation(fields: [automationId], references: [id], onDelete: SetNull)
 }
+
+
+model ContactMessage {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  phone     String?
+  subject   String?
+  message   String
+  ip        String?
+  userAgent String?
+  read      Boolean  @default(false)
+  readAt    DateTime?
+  readBy    String?
+  // Whether the notification email was sent successfully
+  emailSent Boolean  @default(false)
+  emailError String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([read])
+}
