@@ -2,12 +2,15 @@ import { NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
 
 const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 587,
-  secure: false,
+  host: 'mail.baahe.org',
+  port: 465,
+  secure: true, // port 465 = SMTPS (TLS on connect)
   auth: {
-    user: process.env.SMTP_USER || 'kaizenglobalconsult@gmail.com',
+    user: process.env.SMTP_USER || 'sendflow@baahe.org',
     pass: process.env.SMTP_PASS || '',
+  },
+  tls: {
+    rejectUnauthorized: true,
   },
 });
 

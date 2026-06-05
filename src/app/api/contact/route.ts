@@ -4,20 +4,24 @@ import nodemailer from 'nodemailer';
 
 // Notification target — the same address that receives KGC leads.
 // Centralizes inbound inquiries so Don doesn't have to check multiple inboxes.
-const TO_EMAIL = 'Kaizensalesconsult@gmail.com';
-const FROM_EMAIL = 'noreply@sendflow.africa';
+const TO_EMAIL = process.env.CONTACT_TO_EMAIL || 'sendflow@baahe.org';
+const FROM_EMAIL = process.env.CONTACT_FROM_EMAIL || 'sendflow@baahe.org';
 const FROM_NAME = 'SendFlow Contact Form';
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_NOTIFY_CHAT = process.env.TELEGRAM_NOTIFY_CHAT;
 
 const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 587,
-  secure: false,
+  host: 'mail.baahe.org',
+  port: 465,
+  secure: true, // port 465 = SMTPS (TLS on connect)
   auth: {
-    user: process.env.SMTP_USER || 'kaizenglobalconsult@gmail.com',
+    user: process.env.SMTP_USER || 'sendflow@baahe.org',
     pass: process.env.SMTP_PASS || '',
+  },
+  tls: {
+    // Don't fail on self-signed certs in dev; remove if cPanel uses a trusted cert
+    rejectUnauthorized: true,
   },
 });
 
