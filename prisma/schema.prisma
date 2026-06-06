@@ -337,3 +337,35 @@ model ContactMessage {
   @@index([createdAt])
   @@index([read])
 }
+
+// InboundEmail — IMAP inbox mirror for sendflow@baahe.org.
+// Polled by /api/cron/fetch-mail (Vercel cron).
+// See prisma/migrations/20260606_inbound_email_inbox/migration.sql
+model InboundEmail {
+  id               String    @id @default(cuid())
+  uid              Int
+  mailbox          String    @default("INBOX")
+  messageId        String?
+  fromAddress      String
+  fromName         String?
+  toAddress        String
+  cc               String?
+  subject          String?
+  sentAt           DateTime?
+  receivedAt       DateTime?
+  textBody         String?
+  htmlBody         String?
+  snippet          String    @default("")
+  attachments      String? // JSON array
+  read             Boolean   @default(false)
+  readAt           DateTime?
+  readBy           String?
+  matchedContactId String?
+  fetchedAt        DateTime  @default(now())
+
+  @@unique([mailbox, uid])
+  @@index([receivedAt])
+  @@index([fromAddress])
+  @@index([read])
+  @@index([messageId])
+}
