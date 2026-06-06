@@ -3,7 +3,7 @@
 -- Reason: Don sends Gmail -> sendflow@baahe.org and expects to see it in the
 -- SendFlow dashboard. There's no IMAP poller in the codebase — the
 -- /dashboard/messages view only shows contact form submissions. This table
--- is the destination for a Vercel-cron-driven IMAP fetcher.
+-- is the destination for the IMAP fetcher at src/lib/mail-fetcher.ts.
 
 CREATE TABLE IF NOT EXISTS "InboundEmail" (
     "id" TEXT NOT NULL PRIMARY KEY,
