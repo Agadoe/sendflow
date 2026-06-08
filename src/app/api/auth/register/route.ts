@@ -40,11 +40,11 @@ export async function POST(req: Request) {
 
     const passwordHash = await bcrypt.hash(password, 12);
     const user = await prisma.user.create({
-      data: { email, name, passwordHash, isOwner: true },
-      select: { id: true, email: true, name: true, plan: true, isOwner: true, createdAt: true },
+      data: { email, name, passwordHash, isOwner: true, role: 'ADMIN' },
+      select: { id: true, email: true, name: true, plan: true, isOwner: true, role: true, createdAt: true },
     });
 
-    const token = await new SignJWT({ sub: user.id, email: user.email, name: user.name, plan: user.plan, isOwner: true })
+    const token = await new SignJWT({ sub: user.id, email: user.email, name: user.name, plan: user.plan, isOwner: true, role: user.role })
       .setProtectedHeader({ alg: 'HS256' })
       .setIssuedAt()
       .setExpirationTime('7d')

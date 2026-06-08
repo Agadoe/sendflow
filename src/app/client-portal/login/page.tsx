@@ -1,10 +1,18 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 
-export default function ClientLoginPage() {
+function safeRedirect(target: string | null, fallback: string): string {
+  if (!target) return fallback;
+  // Open-redirect guard: must be a same-origin path starting with `/` (not `//` or `http`)
+  if (!target.startsWith('/') || target.startsWith('//')) return fallback;
+  return target;
+}
+
+function ClientLoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [isSignup, setIsSignup] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -39,7 +47,9 @@ export default function ClientLoginPage() {
         return;
       }
 
-      router.push('/client-portal');
+      // Honor ?redirect= (set by middleware) but only if it's a same-origin path
+      const redirectTo = safeRedirect(searchParams.get('redirect'), '/client-portal');
+      router.push(redirectTo);
       router.refresh();
     } catch {
       setError('Network error. Try again.');
@@ -73,8 +83,10 @@ export default function ClientLoginPage() {
       }
 
       setTrialMsg(data.trialMessage || 'Trial started! Redirecting to your dashboard...');
+      // Honor ?redirect= on signup too — for the rare case someone signs up at /client-portal/login?redirect=/client-portal/settings
+      const redirectTo = safeRedirect(searchParams.get('redirect'), '/client-portal');
       setTimeout(() => {
-        router.push('/client-portal');
+        router.push(redirectTo);
         router.refresh();
       }, 1500);
     } catch {
@@ -257,5 +269,14 @@ export default function ClientLoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ClientLoginPage() {
+  // useSearchParams() requires a Suspense boundary in Next.js — wrap the form
+  return (
+    <Suspense fallback={null}>
+      <ClientLoginForm />
+    </Suspense>
   );
 }
