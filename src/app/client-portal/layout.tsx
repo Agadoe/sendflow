@@ -1,6 +1,13 @@
 import { cookies } from 'next/headers';
-import { redirect } from 'next/navigation';
 import { jwtVerify } from 'jose';
+
+// Auth is enforced by src/middleware.ts. This layout is intentionally a
+// passthrough: it only decodes the JWT to expose `user` via... nothing, actually.
+// We just render the children. The previous version had a server-side auth
+// check that triggered an infinite redirect loop on /client-portal/login
+// (the layout wraps the login page, so an unauthenticated visit to the login
+// page kept redirecting to itself). The middleware already does the right thing
+// (PUBLIC_PATHS includes /client-portal/login), so this layout should not.
 
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET || 'development-secret'
@@ -11,22 +18,24 @@ export default async function ClientPortalLayout({
 }: {
   children: React.ReactNode;
 }) {
+  // Decode the token if present (for UI personalization), but NEVER redirect
+  // from here — that's the middleware's job.
   const cookieStore = await cookies();
   const token = cookieStore.get('sf_token')?.value;
 
-  if (!token) {
-    redirect('/client-portal/login');
+  let user: { sub?: string; email?: string; name?: string; role?: string } = {};
+  if (token) {
+    try {
+      const { payload } = await jwtVerify(token, JWT_SECRET);
+      user = payload as { sub?: string; email?: string; name?: string; role?: string };
+    } catch {
+      // Invalid token: middleware will have already redirected. Just ignore.
+    }
   }
 
-  let user: { sub?: string; email?: string; name?: string; role?: string } = {};
-  try {
-    const { payload } = await jwtVerify(token, JWT_SECRET);
-    user = payload as { sub?: string; email?: string; name?: string; role?: string };
-    if (user.role !== 'CLIENT') {
-      redirect('/client-portal/login');
-    }
-  } catch {
-    redirect('/client-portal/login');
+  // No user (e.g. on /client-portal/login) — render a minimal wrapper.
+  if (!user.sub) {
+    return <main className="min-h-screen">{children}</main>;
   }
 
   return (
