@@ -1,5 +1,5 @@
 import WacliConnectPage from '@/components/WacliConnectPage';
 
-export default function ConnectPage() {
+export default function ClientPortalConnectPage() {
   return <WacliConnectPage />;
 }

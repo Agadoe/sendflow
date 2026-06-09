@@ -52,6 +52,7 @@ export default async function ClientPortalLayout({
         {/* Nav */}
         <nav className="flex-1 px-3 py-4 space-y-1">
           <NavLink href="/client-portal" label="Dashboard" icon="📊" />
+          <NavLink href="/client-portal/connect" label="Connect WhatsApp" icon="📱" />
           <NavLink href="/client-portal/leads" label="My Leads" icon="👥" />
           <NavLink href="/client-portal/campaigns" label="My Campaigns" icon="📨" />
           <NavLink href="/client-portal/reports" label="Reports" icon="📈" />
