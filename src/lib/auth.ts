@@ -36,7 +36,6 @@ function buildSession(user: {
     isOwner: user.isOwner,
   };
 }
-
 /**
  * Extract and verify the sf_token cookie, returning the session user with role.
  */
@@ -50,23 +49,12 @@ export async function getSession(req: NextRequest): Promise<SessionUser | null> 
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, email: true, name: true, plan: true, isOwner: true },
+      select: { id: true, email: true, name: true, plan: true, isOwner: true, role: true },
     });
 
     if (!user) return null;
 
-    // Owner: no TeamMember lookup needed
-    if (user.isOwner) {
-      return buildSession({ ...user, role: 'OWNER' });
-    }
-
-    // Team member: look up their role
-    const membership = await prisma.teamMember.findFirst({
-      where: { userId },
-      select: { role: true },
-    });
-
-    return buildSession({ ...user, role: membership?.role ?? 'VIEWER' });
+    return buildSession(user);
   } catch {
     return null;
   }
@@ -125,19 +113,11 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, email: true, name: true, plan: true, isOwner: true },
+      select: { id: true, email: true, name: true, plan: true, isOwner: true, role: true },
     });
     if (!user) return null;
 
-    if (user.isOwner) {
-      return buildSession({ ...user, role: 'OWNER' });
-    }
-
-    const membership = await prisma.teamMember.findFirst({
-      where: { userId },
-      select: { role: true },
-    });
-    return buildSession({ ...user, role: membership?.role ?? 'VIEWER' });
+    return buildSession(user);
   } catch {
     return null;
   }
