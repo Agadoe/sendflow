@@ -21,6 +21,13 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
+  // Multi-tenant wacli session fields
+  wacliSessionId       String?   // Unique identifier for this user's wacli session
+  wacliStatus          String?   // DISCONNECTED | QR_READY | AUTHENTICATED | ERROR
+  wacliPhone           String?   // WhatsApp phone number once connected
+  wacliLastConnectedAt DateTime? // Timestamp of last successful connection
+  wacliQrCode          String?   // Transient QR code for re-display during auth flow
+
   campaigns   Campaign[]
   contacts    Contact[]
   payments    Payment[]

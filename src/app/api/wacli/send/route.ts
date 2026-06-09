@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { getCurrentUser } from '@/lib/auth';
 
 const DAEMON_URL = process.env.WACLI_DAEMON_URL || 'http://127.0.0.1:4555';
 
@@ -11,6 +12,12 @@ function formatPhone(phone: string): string {
 
 export async function POST(req: Request) {
   try {
+    // Get the current user
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { phone, message } = await req.json();
 
     if (!phone || !message) {
@@ -22,7 +29,10 @@ export async function POST(req: Request) {
 
     const res = await fetch(`${DAEMON_URL}/send`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'X-User-Id': user.id
+      },
       body,
     });
 

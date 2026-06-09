@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getCurrentUser } from '@/lib/auth';
 
 const DAEMON_URL = process.env.WACLI_DAEMON_URL || 'http://127.0.0.1:4555';
 
@@ -10,10 +11,13 @@ function formatPhone(phone: string): string {
   return `+233${clean}`;
 }
 
-async function sendViaDaemon(phone: string, message: string): Promise<void> {
+async function sendViaDaemon(userId: string, phone: string, message: string): Promise<void> {
   const res = await fetch(`${DAEMON_URL}/send`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 
+      'Content-Type': 'application/json',
+      'X-User-Id': userId
+    },
     body: JSON.stringify({ phone, message }),
   });
   if (!res.ok) {
@@ -23,15 +27,17 @@ async function sendViaDaemon(phone: string, message: string): Promise<void> {
 }
 
 export async function POST(req: Request) {
-  const cookieHeader = req.headers.get('cookie');
-  const userId = cookieHeader ? cookieHeader.match(/sf_token=([^;]+)/)?.[1] : null;
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // Get the current user
+  const user = await getCurrentUser();
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
 
   const { campaignId } = await req.json();
   if (!campaignId) return NextResponse.json({ error: 'campaignId required' }, { status: 400 });
 
   const campaign = await prisma.campaign.findUnique({
-    where: { id: campaignId, userId },
+    where: { id: campaignId, userId: user.id },
     include: { messages: { include: { contact: true }, where: { status: 'PENDING' } } },
   });
 
@@ -48,7 +54,7 @@ export async function POST(req: Request) {
   for (const msg of campaign.messages) {
     try {
       const formatted = formatPhone(msg.contact.phone);
-      await sendViaDaemon(formatted, campaign.content);
+      await sendViaDaemon(user.id, formatted, campaign.content);
       await prisma.message.update({ where: { id: msg.id }, data: { status: 'SENT', sentAt: new Date() } });
       sent++;
     } catch (e: any) {
