@@ -36,6 +36,7 @@ export async function POST(req: Request) {
     const passwordHash = await bcrypt.hash(password, 12);
 
     // Create user with email NOT verified — they must click the verify link first.
+    console.log('[register] BEFORE create, email:', email);
     const user = await prisma.user.create({
       data: {
         email,
@@ -45,8 +46,9 @@ export async function POST(req: Request) {
         role: 'ADMIN',
         // emailVerified intentionally null — gate is on the next line
       },
-      select: { id: true, email: true, name: true },
+      select: { id: true, email: true, name: true, emailVerified: true },
     });
+    console.log('[register] AFTER create, user:', JSON.stringify(user));
 
     // Issue a secure random token valid for 1 hour.
     const token = randomBytes(32).toString('hex');
