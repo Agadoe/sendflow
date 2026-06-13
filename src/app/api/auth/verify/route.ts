@@ -6,6 +6,14 @@ const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET || 'development-secret'
 );
 
+const ATTRIBUTION_CLAIMS = [
+  'ref',
+  'utm_source',
+  'utm_medium',
+  'utm_campaign',
+  'utm_content',
+] as const;
+
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const token = searchParams.get('token');
@@ -14,23 +22,68 @@ export async function GET(req: Request) {
   try {
     const { payload } = await jwtVerify(token, JWT_SECRET);
     const email = payload.sub as string;
+    if (!email) return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
+
+    // Pull attribution claims from the magic-link JWT, if any.
+    const attribution: Record<string, string> = {};
+    for (const k of ATTRIBUTION_CLAIMS) {
+      const v = payload[k];
+      if (typeof v === 'string' && v) attribution[k] = v;
+    }
 
     let user = await prisma.user.findUnique({ where: { email } });
     if (!user) {
-      user = await prisma.user.create({ data: { email, name: email.split('@')[0] } });
+      // First-time verify creates the user. Free plan, 14-day trial copy.
+      // Note: this is a magic-link flow, not the standard /register form, so
+      // we don't collect name/password here — those can be added post-login.
+      user = await prisma.user.create({
+        data: { email, name: email.split('@')[0] },
+      });
     }
 
-    const sessionToken = await new SignJWT({ sub: user.id, email: user.email })
+    // Mark the email as verified (idempotent — only set the timestamp once).
+    if (!user.emailVerified) {
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: { emailVerified: new Date() },
+      });
+    }
+
+    // TODO(iter 4+): persist attribution to a `LeadAttribution` table
+    //   so the admin dashboard can show "this user came from leadops campaign X".
+    //   For iter 3 we just pass it through to the session payload for the
+    //   client to read on first-paint.
+    if (Object.keys(attribution).length > 0) {
+      console.log(`[verify] attribution for ${email}:`, attribution);
+    }
+
+    const sessionToken = await new SignJWT({
+      sub: user.id,
+      email: user.email,
+      ...attribution,
+    })
       .setProtectedHeader({ alg: 'HS256' })
       .setIssuedAt()
       .setExpirationTime('7d')
       .sign(JWT_SECRET);
 
-    return NextResponse.json({ user }, {
-      headers: {
-        'Set-Cookie': `sf_token=${sessionToken}; HttpOnly; Path=/; Max-Age=${7 * 24 * 60 * 60}; SameSite=Lax`,
+    return NextResponse.json(
+      {
+        user: {
+          id: user.id,
+          email: user.email,
+          emailVerified: user.emailVerified,
+          role: user.role,
+          plan: user.plan,
+        },
+        attribution,
       },
-    });
+      {
+        headers: {
+          'Set-Cookie': `sf_token=${sessionToken}; HttpOnly; Path=/; Max-Age=${7 * 24 * 60 * 60}; SameSite=Lax`,
+        },
+      }
+    );
   } catch {
     return NextResponse.json({ error: 'Invalid or expired token' }, { status: 401 });
   }
