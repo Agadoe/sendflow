@@ -1,29 +1,21 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { randomBytes } from 'crypto';
 import bcrypt from 'bcryptjs';
-import { SignJWT } from 'jose';
-import { checkRateLimit, clientKey } from '@/lib/rate-limit';
+import { prisma } from '@/lib/prisma';
+import { sendMail } from '@/lib/email';
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET || 'development-secret'
-);
-
-// 3 signups per 10 min per IP — bots shouldn't be mass-creating accounts.
-// Legitimate users can retry in 10 min; bots give up.
-const LIMIT = { max: 3, windowSec: 600 };
+const LIMIT = { max: 3, windowSec: 600 }; // 3 signups / 10 min / IP
 
 export async function POST(req: Request) {
-  const limit = checkRateLimit(clientKey(req, 'auth:register'), LIMIT);
+  // Rate limit
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() || 'unknown';
+  const key = `auth:register:${ip}`;
+  const { checkRateLimit } = await import('@/lib/rate-limit');
+  const limit = checkRateLimit(key, LIMIT);
   if (!limit.ok) {
     return NextResponse.json(
       { error: 'Too many registration attempts. Try again in 10 minutes.' },
-      {
-        status: 429,
-        headers: {
-          'Retry-After': String(limit.resetInSec),
-          'X-RateLimit-Remaining': '0',
-        },
-      }
+      { status: 429, headers: { 'Retry-After': String(limit.resetInSec), 'X-RateLimit-Remaining': '0' } }
     );
   }
 
@@ -32,6 +24,9 @@ export async function POST(req: Request) {
     if (!email || !name || !password) {
       return NextResponse.json({ error: 'Name, email, and password required' }, { status: 400 });
     }
+    if (password.length < 8) {
+      return NextResponse.json({ error: 'Password must be at least 8 characters' }, { status: 400 });
+    }
 
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) {
@@ -39,21 +34,83 @@ export async function POST(req: Request) {
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
+
+    // Create user with email NOT verified — they must click the verify link first.
     const user = await prisma.user.create({
-      data: { email, name, passwordHash, isOwner: true, role: 'ADMIN' },
-      select: { id: true, email: true, name: true, plan: true, isOwner: true, role: true, createdAt: true },
+      data: {
+        email,
+        name,
+        passwordHash,
+        isOwner: true,
+        role: 'ADMIN',
+        // emailVerified intentionally null — gate is on the next line
+      },
+      select: { id: true, email: true, name: true },
     });
 
-    const token = await new SignJWT({ sub: user.id, email: user.email, name: user.name, plan: user.plan, isOwner: true, role: user.role })
-      .setProtectedHeader({ alg: 'HS256' })
-      .setIssuedAt()
-      .setExpirationTime('7d')
-      .sign(JWT_SECRET);
-
-    const cookie = `sf_token=${token}; HttpOnly; Path=/; Max-Age=${7 * 24 * 60 * 60}; SameSite=Lax`;
-    return NextResponse.json({ user }, {
-      headers: { 'Set-Cookie': cookie },
+    // Issue a secure random token valid for 1 hour.
+    const token = randomBytes(32).toString('hex');
+    const expires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+    await prisma.verificationToken.create({
+      data: { identifier: email, token, expires },
     });
+
+    // Send verification email via the shared email lib (test-mode aware).
+    const reqUrl = new URL(req.url);
+    const base = process.env.NEXT_PUBLIC_APP_URL || `${reqUrl.protocol}//${reqUrl.host}`;
+    const verifyUrl = `${base}/api/auth/verify-email?token=${encodeURIComponent(token)}`;
+
+    const result = await sendMail({
+      to: email,
+      subject: 'Verify your SendFlow account',
+      text: [
+        `Hi ${name},`,
+        ``,
+        `Welcome to SendFlow! Click the link below to verify your email address.`,
+        `It expires in 1 hour.`,
+        ``,
+        verifyUrl,
+        ``,
+        `If you didn't create a SendFlow account, you can ignore this email.`,
+      ].join('\n'),
+      html: `
+        <p>Hi ${name},</p>
+        <p>Welcome to SendFlow! Click the button below to verify your email address.</p>
+        <p style="margin:24px 0">
+          <a href="${verifyUrl}"
+             style="background:#0EA5E9;color:#fff;padding:12px 20px;border-radius:8px;
+                    text-decoration:none;display:inline-block;font-weight:600">
+            Verify email address
+          </a>
+        </p>
+        <p style="color:#64748B;font-size:13px">
+          Or paste this URL: <code style="word-break:break-all">${verifyUrl}</code>
+        </p>
+        <p style="color:#64748B;font-size:13px">
+          This link expires in <strong>1 hour</strong>. If you didn't create a
+          SendFlow account, you can safely ignore this email.
+        </p>
+      `,
+      testMode: true, // test mode ON by default — flip MAGIC_LINK_TEST_MODE=false to disable
+    });
+
+    if (!result.ok) {
+      console.error('[register] verification email failed:', result.error, { to: email });
+      // Don't expose SMTP errors to client — account was created, they can re-request verify
+      return NextResponse.json(
+        { error: 'Account created, but verification email failed. Contact support.' },
+        { status: 502 }
+      );
+    }
+
+    // 202 Accepted — account exists, verify email to activate.
+    return NextResponse.json(
+      {
+        message: 'Account created. Check your email to verify your address.',
+        deliveredTo: result.deliveredTo,
+      },
+      { status: 202 }
+    );
   } catch (err) {
     console.error(err);
     return NextResponse.json({ error: 'Registration failed' }, { status: 500 });

@@ -1,6 +1,7 @@
 'use client';
 
-import { Suspense, useState } from 'react';
+import { Suspense, useState, type ReactNode } from 'react';
+
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 
@@ -16,7 +17,7 @@ function LoginForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<ReactNode>('');
   const router = useRouter();
 
   async function handleLogin(e: React.FormEvent) {
@@ -34,6 +35,29 @@ function LoginForm() {
       const data = await res.json();
 
       if (!res.ok) {
+        if (data.needsVerification) {
+          setError(
+            <span>
+              Please verify your email first.{' '}
+              <button
+                type="button"
+                className="underline hover:no-underline"
+                onClick={async () => {
+                  if (!email) return;
+                  await fetch('/api/auth/resend-verify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email }),
+                  });
+                  setError('Verification email resent. Check your inbox.');
+                }}
+              >
+                Resend verification email
+              </button>
+            </span>
+          );
+          return;
+        }
         setError(data.error || 'Login failed');
         return;
       }

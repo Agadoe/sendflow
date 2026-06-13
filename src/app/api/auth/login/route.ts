@@ -43,6 +43,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
     }
 
+    // Block login until email is verified.
+    if (!user.emailVerified) {
+      return NextResponse.json(
+        { error: 'Please verify your email before signing in.', needsVerification: true },
+        { status: 403 }
+      );
+    }
+
     const token = await new SignJWT({ sub: user.id, email: user.email, name: user.name, plan: user.plan, role: user.role })
       .setProtectedHeader({ alg: 'HS256' })
       .setIssuedAt()
