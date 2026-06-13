@@ -85,22 +85,10 @@ export async function POST(req: Request) {
   });
 
   if (!result.ok) {
-    const smtpTail = (process.env.SMTP_PASS || '').slice(-3);
-    console.error('[magic-link] SMTP failed:', result.error, { to: email, testMode, smtpHost: process.env.SMTP_HOST, smtpUserSet: !!process.env.SMTP_USER, smtpPassLen: (process.env.SMTP_PASS || '').length, smtpPassTail: smtpTail });
+    console.error('[magic-link] SMTP failed:', result.error, { to: email, testMode });
     // Don't leak SMTP error to the client, but don't pretend success either.
     return NextResponse.json(
-      {
-        success: false,
-        error: 'Failed to send email. Try again in a moment.',
-        // TEMP debug — remove after iter 3 verification
-        debug: {
-          smtpError: result.error,
-          smtpHost: process.env.SMTP_HOST || null,
-          smtpUser: process.env.SMTP_USER || null,
-          smtpPassLen: (process.env.SMTP_PASS || '').length,
-          smtpPassTail: smtpTail,
-        },
-      },
+      { success: false, error: 'Failed to send email. Try again in a moment.' },
       { status: 502 }
     );
   }
