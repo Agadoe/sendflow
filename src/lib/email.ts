@@ -22,10 +22,14 @@ import nodemailer from 'nodemailer';
 const SMTP_HOST = process.env.SMTP_HOST || 'mail.baahe.org';
 const SMTP_PORT = Number(process.env.SMTP_PORT || 465);
 const SMTP_SECURE = process.env.SMTP_SECURE !== 'false'; // default true
-const SMTP_USER = process.env.SMTP_USER || 'sendflow@baahe.org';
-const SMTP_PASS = process.env.SMTP_PASS || '';
+// cPanel exports sometimes include a literal "\n" at the end of secrets
+// (escape sequence, not a real newline). Strip it so SMTP auth works.
+const _rawUser = process.env.SMTP_USER || 'sendflow@baahe.org';
+const _rawPass = process.env.SMTP_PASS || '';
+const SMTP_USER = _rawUser.replace(/\\n$/, '').trim();
+const SMTP_PASS = _rawPass.replace(/\\n$/, '').trim();
 const FROM_NAME = process.env.FROM_NAME || 'SendFlow';
-const FROM_EMAIL = process.env.FROM_EMAIL || SMTP_USER;
+const FROM_EMAIL = (process.env.FROM_EMAIL || SMTP_USER).replace(/\\n$/, '').trim();
 
 // Don's catch-all inbox for tests / verifications. All SendFlow email flows
 // MUST land here first; production recipients only after manual sign-off.
@@ -35,14 +39,11 @@ let cachedTransporter: nodemailer.Transporter | null = null;
 
 function getTransporter(): nodemailer.Transporter {
   if (cachedTransporter) return cachedTransporter;
-  // cPanel exports sometimes include a literal "\n" at the end of secrets.
-  // Trim it; otherwise SMTP auth fails with "535 Incorrect authentication data".
-  const pass = SMTP_PASS.replace(/\\n$/, '').trim();
   cachedTransporter = nodemailer.createTransport({
     host: SMTP_HOST,
     port: SMTP_PORT,
     secure: SMTP_SECURE,
-    auth: { user: SMTP_USER, pass },
+    auth: { user: SMTP_USER, pass: SMTP_PASS },
     tls: { rejectUnauthorized: true },
   });
   return cachedTransporter;
