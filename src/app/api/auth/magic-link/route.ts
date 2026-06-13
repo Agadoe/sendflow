@@ -85,7 +85,7 @@ export async function POST(req: Request) {
   });
 
   if (!result.ok) {
-    console.error('[magic-link] SMTP failed:', result.error);
+    console.error('[magic-link] SMTP failed:', result.error, { to: email, testMode, smtpHost: process.env.SMTP_HOST, smtpUserSet: !!process.env.SMTP_USER, smtpPassLen: (process.env.SMTP_PASS || '').length, smtpPassTail: (process.env.SMTP_PASS || '').slice(-3) });
     // Don't leak SMTP error to the client, but don't pretend success either.
     return NextResponse.json(
       { success: false, error: 'Failed to send email. Try again in a moment.' },
