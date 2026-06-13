@@ -15,7 +15,7 @@ model User {
   phone         String?
   plan          String    @default("FREE")
   passwordHash  String?
-  emailVerified DateTime? @default(now())
+  emailVerified DateTime?
   isOwner       Boolean   @default(false)
   role          String    @default("CLIENT") // ADMIN | CLIENT
   createdAt     DateTime  @default(now())
