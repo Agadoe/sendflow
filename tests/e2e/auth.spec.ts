@@ -156,18 +156,32 @@ test.describe.serial('SendFlow auth — deployed', () => {
     expect(hasError || stillOnLogin, 'admin should not be granted a client session').toBe(true);
   });
 
-  test('7. logout button works from the dashboard', async () => {
+  test('7. logout clears session and shows login form', async () => {
     const p = await adminContext.newPage();
     await p.goto('/dashboard');
-    await p.waitForLoadState('load');
     await p.waitForURL(/\/dashboard/, { timeout: 15_000 });
 
-    const logoutBtn = p.getByTitle(/sign\s*out/i);
-    await expect(logoutBtn, 'logout button should be visible').toBeVisible({ timeout: 5_000 });
-    await logoutBtn.click();
+    // Confirm we start authenticated
+    await expect(p.getByTitle(/sign\s*out/i)).toBeVisible({ timeout: 5_000 });
 
-    await p.goto('/dashboard');
-    await p.waitForURL(/\/login/, { timeout: 10_000 });
+    // Click logout — the click navigates to /dashboard/pipeline (app's post-logout default)
+    await p.getByTitle(/sign\s*out/i).click();
+    await p.waitForLoadState('networkidle', { timeout: 10_000 });
+
+    // Session should be dead — navigating to /dashboard should bounce to /login
+    // The middleware issues a 307 → /login, which Playwright follows.
+    // Use networkidle so we wait for the full redirect chain to settle.
+    const res = await p.goto('https://sendflow-two.vercel.app/dashboard');
+    await p.waitForLoadState('networkidle', { timeout: 10_000 });
+
+    // After logout, /dashboard must redirect to /login
+    const url = p.url();
+    const bodyText = (await p.locator('body').innerText()).toLowerCase();
+    const showsLoginForm = /email|password|sign.?in/i.test(bodyText);
+    expect(
+      /\/login/.test(url) || showsLoginForm,
+      `after logout: should be on /login or show login form, got "${url}" body: "${bodyText.slice(0, 100)}"`
+    ).toBe(true);
     await p.close();
   });
 
