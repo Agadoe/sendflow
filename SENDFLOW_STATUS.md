@@ -162,3 +162,25 @@ POST /api/auth/login {"email":"iter4-final-...@finaltest.xyz","password":"FinalP
 ```
 
 **Lesson:** SQLite schema defaults (`DEFAULT CURRENT_TIMESTAMP`) exist at the DB level independently of Prisma schema. When a field unexpectedly gets a value you didn't set, check `prisma/dev.db` schema with `.schema` — not just the Prisma schema file. Explicit `null` assignment in `prisma.user.create({ data: { ..., emailVerified: null } })` overrides DB-level defaults.
+
+## 2026-06-14 — Iteration 5 Complete
+
+### Shipped today
+- ✅ Pro plan enforcement: `src/lib/plans.ts` (FREE/STARTER/GROWTH/PRO limits) wired into `campaigns`, `campaigns/bulk-send`, `contacts`
+- ✅ Forgot password: `testMode: false` — real reset emails now send
+- ✅ Register: `testMode: false` — real verification emails now send
+- ✅ LeadAttribution model + migration + `GET /api/leads/attribution` + register wired to capture `utm_source/medium/campaign + ref`
+- ✅ `POST /api/leads/scout`: ICP engine + Google Maps scraping + scoring → SendFlow DB push
+- ✅ JIJI → SendFlow pipeline: `~/leadops/scrapers/jiji_to_sendflow.py` (ICP filter + email enrichment + SendFlow push)
+- ✅ Paystack live keys: `sk_live_...` + `pk_live_...` deployed to Vercel
+
+### Open work
+1. **Playwright e2e for subscribe/payment flow** — not yet covered
+2. **14 stashed changes** in `whatsapp-saas` — wacli + schema, do not pop without review
+3. **Turso prod migration** — the 20260605 waitlist migration failed on prod; needs manual resolve before next Turso deploy
+
+### SendFlow auth state (2026-06-14)
+- All auth flows now send real emails (testMode: false on register, forgot-password)
+- LeadAttribution: `POST /api/auth/register` captures `{ attribution: { source, medium, campaign, ref } }`
+- Plan enforcement live on: bulk-send, campaigns POST, contacts POST
+- Scout endpoint: `POST /api/leads/scout` — ICP engine + Google Maps + scoring → SendFlow leads
