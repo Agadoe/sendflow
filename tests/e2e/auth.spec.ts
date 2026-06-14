@@ -156,17 +156,19 @@ test.describe.serial('SendFlow auth — deployed', () => {
     expect(hasError || stillOnLogin, 'admin should not be granted a client session').toBe(true);
   });
 
-  test('7. logout button works from the dashboard', async ({ page }) => {
-    await page.goto('/dashboard');
-    await page.waitForURL(/\/dashboard/, { timeout: 10_000 });
+  test('7. logout button works from the dashboard', async () => {
+    const dashPage = await adminContext.newPage();
+    await dashPage.goto('/dashboard');
+    await dashPage.waitForURL(/\/dashboard/, { timeout: 10_000 });
 
-    const logoutBtn = page.getByTitle(/sign\s*out/i);
+    const logoutBtn = dashPage.getByTitle(/sign\s*out/i);
     await expect(logoutBtn, 'logout button should exist on dashboard').toBeVisible();
     await logoutBtn.click();
 
-    await page.goto('/dashboard');
-    await page.waitForURL(/\/login/, { timeout: 5_000 });
-    await expect(page).toHaveURL(/\/login/);
+    await dashPage.goto('/dashboard');
+    await dashPage.waitForURL(/\/login/, { timeout: 5_000 });
+    await expect(dashPage).toHaveURL(/\/login/);
+    await dashPage.close();
   });
 
   test('8. contact form posts successfully and persists', async ({ request }) => {
