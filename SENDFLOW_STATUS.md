@@ -137,3 +137,28 @@ anything) will hit the same issue if/when it's wired in the same way.
 
 ### Blocked / needs Don
 - (none)
+
+### Iter 4 — Email verification on /register (COMPLETE)
+**Date:** 2026-06-13
+**Commit:** `c1207d84` feat + `fc69fdd2` fix + `0c8c2419` cleanup
+
+**What got built:**
+- `/api/auth/register` — creates user with `emailVerified: null`, sends verify link via email.ts, returns 202 (no cookie)
+- `/api/auth/verify-email` (new) — consumes token, sets `emailVerified`, issues 7d session cookie, redirects to /dashboard?verified=true
+- `/api/auth/resend-verify` (new) — re-issues 1h token, rate-limited 3/10min/IP
+- `/api/auth/login` — gate on `emailVerified`, returns 403 `needsVerification: true`
+- Register form — two-step: form → "check your email" screen (no auto-redirect)
+- Login form — `needsVerification` surfaced as inline prompt with resend link
+
+**Root cause caught:** Production DB had `DEFAULT CURRENT_TIMESTAMP` on `emailVerified` column at SQLite level (not in Prisma schema). Fixed by explicitly passing `emailVerified: null` in the create call. No migration needed since the schema itself is correct.
+
+**Verified on production:**
+```
+POST /api/auth/register {"email":"iter4-final-...@finaltest.xyz","password":"FinalPass99!"}
+→ 202 {"message":"Account created. Check your email to verify your address."}
+
+POST /api/auth/login {"email":"iter4-final-...@finaltest.xyz","password":"FinalPass99!"}
+→ 403 {"error":"Please verify your email before signing in.","needsVerification":true}
+```
+
+**Lesson:** SQLite schema defaults (`DEFAULT CURRENT_TIMESTAMP`) exist at the DB level independently of Prisma schema. When a field unexpectedly gets a value you didn't set, check `prisma/dev.db` schema with `.schema` — not just the Prisma schema file. Explicit `null` assignment in `prisma.user.create({ data: { ..., emailVerified: null } })` overrides DB-level defaults.
