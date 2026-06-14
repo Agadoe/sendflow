@@ -32,6 +32,20 @@ export async function POST(req: Request) {
       );
     }
 
+    // Gate: email must be verified before login is allowed.
+    if (!user.emailVerified) {
+      const reqUrl = new URL(req.url);
+      const base = process.env.NEXT_PUBLIC_APP_URL || `${reqUrl.protocol}//${reqUrl.host}`;
+      return NextResponse.json(
+        {
+          error: 'Please verify your email address before signing in.',
+          needsVerification: true,
+          resendUrl: `${base}/api/client-auth/resend-verify`,
+        },
+        { status: 403 }
+      );
+    }
+
     const token = await new SignJWT({ sub: user.id, email: user.email, name: user.name, plan: user.plan, role: user.role })
       .setProtectedHeader({ alg: 'HS256' })
       .setIssuedAt()

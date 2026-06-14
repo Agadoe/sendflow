@@ -28,6 +28,9 @@ function ClientLoginForm() {
   const [company, setCompany] = useState('');
   const [phone, setPhone] = useState('');
   const [trialMsg, setTrialMsg] = useState('');
+  const [needsVerify, setNeedsVerify] = useState(false);
+  const [verifyEmail, setVerifyEmail] = useState('');
+  const [resendMsg, setResendMsg] = useState('');
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -42,15 +45,23 @@ function ClientLoginForm() {
       });
       const data = await res.json();
 
-      if (!res.ok) {
-        setError(data.error || 'Login failed');
+      if (res.ok && data.ok) {
+        // Honor ?redirect= (set by middleware) but only if it's a same-origin path
+        const redirectTo = safeRedirect(searchParams.get('redirect'), '/client-portal');
+        router.push(redirectTo);
+        router.refresh();
         return;
       }
 
-      // Honor ?redirect= (set by middleware) but only if it's a same-origin path
-      const redirectTo = safeRedirect(searchParams.get('redirect'), '/client-portal');
-      router.push(redirectTo);
-      router.refresh();
+      if (res.status === 403 && data.needsVerification) {
+        setNeedsVerify(true);
+        setVerifyEmail(loginEmail);
+        setError('');
+        setLoading(false);
+        return;
+      }
+
+      setError(data.error || 'Login failed');
     } catch {
       setError('Network error. Try again.');
     } finally {
@@ -82,15 +93,30 @@ function ClientLoginForm() {
         return;
       }
 
-      setTrialMsg(data.trialMessage || 'Trial started! Redirecting to your dashboard...');
-      // Honor ?redirect= on signup too — for the rare case someone signs up at /client-portal/login?redirect=/client-portal/settings
-      const redirectTo = safeRedirect(searchParams.get('redirect'), '/client-portal');
-      setTimeout(() => {
-        router.push(redirectTo);
-        router.refresh();
-      }, 1500);
+      // 202 — account created, awaiting email verification. Show success state.
+      setTrialMsg(data.message || 'Account created! Check your email to verify your address.');
+      setError('');
     } catch {
       setError('Network error. Try again.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleResend(e: React.FormEvent) {
+    e.preventDefault();
+    setResendMsg('');
+    setLoading(true);
+    try {
+      const res = await fetch('/api/client-auth/resend-verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: verifyEmail }),
+      });
+      const data = await res.json();
+      setResendMsg(data.message || 'Check your inbox for a new verification link.');
+    } catch {
+      setResendMsg('Failed to resend. Try again.');
     } finally {
       setLoading(false);
     }
@@ -109,11 +135,13 @@ function ClientLoginForm() {
             </svg>
           </div>
           <h1 className="text-2xl font-bold text-white">
-            {isSignup ? 'Start Your Free Trial' : 'Client Portal'}
+            {isSignup ? 'Start Your Free Trial' : needsVerify ? 'Verify Your Email' : 'Client Portal'}
           </h1>
           <p className="text-white/40 text-sm mt-2">
             {isSignup
               ? '14 days free. No credit card required.'
+              : needsVerify
+              ? 'Check your inbox — we sent a verification link.'
               : 'Sign in to your KGC client dashboard'}
           </p>
         </div>
@@ -133,7 +161,35 @@ function ClientLoginForm() {
         )}
 
         <div className="bg-white/5 border border-white/10 rounded-2xl p-8">
-          {isSignup ? (
+          {needsVerify ? (
+            /* EMAIL VERIFICATION REQUIRED */
+            <div className="space-y-4">
+              <p className="text-white/60 text-sm text-center">
+                We sent a verification link to <strong className="text-white">{verifyEmail}</strong>.
+                Click the link in your email to activate your account.
+              </p>
+              {resendMsg && (
+                <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-3 text-green-400 text-sm text-center">
+                  {resendMsg}
+                </div>
+              )}
+              <form onSubmit={handleResend}>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full py-4 bg-white/10 hover:bg-white/20 text-white font-semibold rounded-xl transition disabled:opacity-50"
+                >
+                  {loading ? 'Sending...' : 'Resend verification email'}
+                </button>
+              </form>
+              <button
+                onClick={() => { setNeedsVerify(false); setError(''); setResendMsg(''); }}
+                className="w-full text-white/40 hover:text-white/60 text-sm transition"
+              >
+                ← Back to sign in
+              </button>
+            </div>
+          ) : isSignup ? (
             /* SIGNUP FORM */
             <form onSubmit={handleSignup} className="space-y-4">
               <div>
@@ -241,7 +297,7 @@ function ClientLoginForm() {
               <p className="text-white/40 text-sm">
                 Already have an account?{' '}
                 <button
-                  onClick={() => { setIsSignup(false); setError(''); setTrialMsg(''); }}
+                  onClick={() => { setIsSignup(false); setError(''); setTrialMsg(''); setNeedsVerify(false); }}
                   className="text-amber hover:underline font-medium"
                 >
                   Sign in
@@ -251,7 +307,7 @@ function ClientLoginForm() {
               <p className="text-white/40 text-sm">
                 No account yet?{' '}
                 <button
-                  onClick={() => { setIsSignup(true); setError(''); setTrialMsg(''); }}
+                  onClick={() => { setIsSignup(true); setError(''); setTrialMsg(''); setNeedsVerify(false); }}
                   className="text-amber hover:underline font-medium"
                 >
                   Start free trial
