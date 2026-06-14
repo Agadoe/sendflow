@@ -137,6 +137,12 @@ function LoginForm() {
               Sign up free
             </Link>
           </div>
+
+          <div className="mt-3 text-center">
+            <Link href="/forgot-password" className="text-xs text-slate-light hover:text-slate hover:underline">
+              Forgot your password?
+            </Link>
+          </div>
         </div>
       </div>
     </div>
