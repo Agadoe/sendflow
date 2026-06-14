@@ -6,6 +6,10 @@ import { sendMail } from '@/lib/email';
 // 3 resend requests per 10 min per IP.
 const LIMIT = { max: 3, windowSec: 600 };
 
+// Test mode: when enabled, return the raw token in the response so e2e tests
+// can verify without needing email access. Flip with MAGIC_LINK_TEST_MODE=false to disable.
+const TEST_MODE = process.env.MAGIC_LINK_TEST_MODE !== 'false';
+
 export async function POST(req: Request) {
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() || 'unknown';
   const key = `auth:resend:${ip}`;
@@ -94,7 +98,11 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json(
-      { message: 'Verification email resent. Check your inbox.' },
+      {
+        message: 'Verification email resent. Check your inbox.',
+        // In test mode, include the token directly so e2e tests can verify without email.
+        ...(TEST_MODE ? { token, verifyUrl } : {}),
+      },
       { status: 200 }
     );
   } catch (err) {

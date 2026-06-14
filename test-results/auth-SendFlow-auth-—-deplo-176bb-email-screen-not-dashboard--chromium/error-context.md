@@ -12,19 +12,14 @@
 # Error details
 
 ```
-Error: /verify should succeed for magic-link token
-
-expect(received).toBe(expected) // Object.is equality
-
-Expected: true
-Received: false
+Error: No VerificationToken found for e2e-admin-1781398811914@sendflow.test — register may have failed
 ```
 
 # Test source
 
 ```ts
   1   | import { test, expect, type Page, type BrowserContext } from '@playwright/test';
-  2   | import { SignJWT } from 'jose';
+  2   | import { PrismaClient } from '@prisma/client';
   3   | 
   4   | /**
   5   |  * SendFlow Auth E2E (deployed)
@@ -49,75 +44,75 @@ Received: false
   24  | const ADMIN_NAME = `E2E Admin ${STAMP}`;
   25  | const ADMIN_PASSWORD = 'E2eTest!2026';
   26  | 
-  27  | const JWT_SECRET = new TextEncoder().encode(
-  28  |   process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET || 'development-secret'
-  29  | );
-  30  | 
-  31  | async function registerViaApi(request: any, name: string, email: string, password: string) {
-  32  |   const res = await request.post('/api/auth/register', { data: { name, email, password } });
-  33  |   return res;
-  34  | }
-  35  | 
-  36  | async function getVerifiedSession(request: any, email: string): Promise<Response> {
-  37  |   // Step 1 – request magic-link (email is test-routed to Tedymiles7@gmail.com)
-  38  |   await request.post('/api/auth/magic-link', { data: { email } });
-  39  | 
-  40  |   // Step 2 – re-sign a JWT so we can present it to /verify
-  41  |   const token = await new SignJWT({ sub: email })
-  42  |     .setProtectedHeader({ alg: 'HS256' })
-  43  |     .setIssuedAt()
-  44  |     .setExpirationTime('15m')
-  45  |     .sign(JWT_SECRET);
+  27  | const prisma = new PrismaClient();
+  28  | 
+  29  | async function registerViaApi(request: any, name: string, email: string, password: string) {
+  30  |   const res = await request.post('/api/auth/register', { data: { name, email, password } });
+  31  |   return res;
+  32  | }
+  33  | 
+  34  | /**
+  35  |  * Obtain a verified session for the given email by reading the VerificationToken
+  36  |  * that was created by /register, then calling /verify-email to consume it.
+  37  |  */
+  38  | async function getVerifiedSession(request: any, email: string): Promise<{ status: number; headers: Headers }> {
+  39  |   // Wait for DB write, then read the token created by register
+  40  |   await new Promise(r => setTimeout(r, 500));
+  41  |   const record = await prisma.verificationToken.findFirst({
+  42  |     where: { identifier: email },
+  43  |     orderBy: { expires: 'desc' },
+  44  |   });
+> 45  |   if (!record) throw new Error(`No VerificationToken found for ${email} — register may have failed`);
+      |                      ^ Error: No VerificationToken found for e2e-admin-1781398811914@sendflow.test — register may have failed
   46  | 
-  47  |   // Step 3 – call verify; marks emailVerified and returns session cookie
-  48  |   const verifyRes = await request.get(`/api/auth/verify?token=${encodeURIComponent(token)}`);
-  49  |   return verifyRes;
-  50  | }
-  51  | 
-  52  | async function applySessionCookie(context: BrowserContext, response: Response) {
-  53  |   const setCookie = response.headers.get('set-cookie') || '';
-  54  |   const match = setCookie.match(/sf_token=([^;]+)/);
-  55  |   if (!match) return;
-  56  |   await context.addCookies([{
-  57  |     name: 'sf_token',
-  58  |     value: match[1],
-  59  |     domain: new URL('https://sendflow-two.vercel.app').hostname,
-  60  |     path: '/',
-  61  |     httpOnly: true,
-  62  |     secure: true,
-  63  |     sameSite: 'Lax',
-  64  |   }]);
-  65  | }
-  66  | 
-  67  | async function register(page: Page, name: string, email: string, password: string) {
-  68  |   await page.goto('/register');
-  69  |   await page.getByPlaceholder('Esther Mensah').fill(name);
-  70  |   await page.getByPlaceholder('you@example.com').fill(email);
-  71  |   await page.locator('input[type="password"]').fill(password);
-  72  |   await page.getByRole('button', { name: /create account/i }).click();
-  73  | }
-  74  | 
-  75  | async function login(page: Page, email: string, password: string) {
-  76  |   await page.goto('/login');
-  77  |   await page.locator('input[type="email"]').fill(email);
-  78  |   await page.locator('input[type="password"]').fill(password);
-  79  |   await page.getByRole('button', { name: /sign in/i }).click();
-  80  | }
-  81  | 
-  82  | test.describe.serial('SendFlow auth — deployed', () => {
-  83  |   let adminContext: BrowserContext;
-  84  | 
-  85  |   test.beforeAll(async ({ browser }) => {
-  86  |     adminContext = await browser.newContext();
-  87  |     const apiRequest = adminContext.request;
-  88  | 
-  89  |     const regRes = await registerViaApi(apiRequest, ADMIN_NAME, ADMIN_EMAIL, ADMIN_PASSWORD);
-  90  |     expect(regRes.status(), 'admin registration should succeed').toBe(202);
-  91  | 
-  92  |     const verifyRes = await getVerifiedSession(apiRequest, ADMIN_EMAIL);
-> 93  |     expect(verifyRes.ok(), '/verify should succeed for magic-link token').toBe(true);
-      |                                                                           ^ Error: /verify should succeed for magic-link token
-  94  |     await applySessionCookie(adminContext, verifyRes);
+  47  |   // Call verify-email (the VerificationToken endpoint, separate from magic-link JWT /verify)
+  48  |   const verifyRes = await request.get(`/api/auth/verify-email?token=${record.token}`, {
+  49  |     maxRedirects: 0,  // capture Set-Cookie on the 302 before following it
+  50  |   });
+  51  |   return { status: verifyRes.status(), headers: verifyRes.headers() };
+  52  | }
+  53  | 
+  54  | async function applySessionCookie(context: BrowserContext, response: { status: number; headers: Headers }) {
+  55  |   const setCookie = response.headers.get('set-cookie') || '';
+  56  |   const match = setCookie.match(/sf_token=([^;]+)/);
+  57  |   if (!match) {
+  58  |     console.warn('[applySessionCookie] no sf_token found in Set-Cookie header:', setCookie);
+  59  |     return;
+  60  |   }
+  61  |   await context.addCookies([{
+  62  |     name: 'sf_token',
+  63  |     value: match[1],
+  64  |     domain: new URL('https://sendflow-two.vercel.app').hostname,
+  65  |     path: '/',
+  66  |     httpOnly: true,
+  67  |     secure: true,
+  68  |     sameSite: 'Lax',
+  69  |   }]);
+  70  | }
+  71  | 
+  72  | async function register(page: Page, name: string, email: string, password: string) {
+  73  |   await page.goto('/register');
+  74  |   await page.getByPlaceholder('Esther Mensah').fill(name);
+  75  |   await page.getByPlaceholder('you@example.com').fill(email);
+  76  |   await page.locator('input[type="password"]').fill(password);
+  77  |   await page.getByRole('button', { name: /create account/i }).click();
+  78  | }
+  79  | 
+  80  | test.describe.serial('SendFlow auth — deployed', () => {
+  81  |   let adminContext: BrowserContext;
+  82  | 
+  83  |   test.beforeAll(async ({ browser }) => {
+  84  |     adminContext = await browser.newContext();
+  85  |     const apiRequest = adminContext.request;
+  86  | 
+  87  |     const regRes = await registerViaApi(apiRequest, ADMIN_NAME, ADMIN_EMAIL, ADMIN_PASSWORD);
+  88  |     expect(regRes.status(), 'admin registration should succeed').toBe(202);
+  89  | 
+  90  |     const verifyRes = await getVerifiedSession(apiRequest, ADMIN_EMAIL);
+  91  |     expect([302, 200]).toContain(verifyRes.status(), '/verify-email should return 302 or 200');
+  92  |     await applySessionCookie(adminContext, verifyRes);
+  93  | 
+  94  |     await prisma.$disconnect();
   95  |   });
   96  | 
   97  |   test('1. admin register → "check your email" screen (not /dashboard)', async ({ page }) => {
@@ -169,52 +164,4 @@ Received: false
   143 |     await page.locator('input[type="password"]').fill(ADMIN_PASSWORD);
   144 |     await page.getByRole('button', { name: /sign in/i }).click();
   145 | 
-  146 |     await page.waitForURL(/sendflow-two\.vercel\.app\/dashboard/, { timeout: 10_000 });
-  147 |     expect(page.url()).not.toContain('evil.com');
-  148 |   });
-  149 | 
-  150 |   test('6. client portal rejects an admin account (role guard)', async ({ page }) => {
-  151 |     await page.goto('/client-portal/login');
-  152 |     await page.locator('input[type="email"]').fill(ADMIN_EMAIL);
-  153 |     await page.locator('input[type="password"]').fill(ADMIN_PASSWORD);
-  154 |     await page.getByRole('button', { name: /sign in|log in|login/i }).first().click();
-  155 | 
-  156 |     await page.waitForTimeout(2_000);
-  157 |     const url = page.url();
-  158 |     const body = await page.locator('body').innerText();
-  159 | 
-  160 |     const hasError = /admin|role|not allowed|client only/i.test(body);
-  161 |     const stillOnLogin = /client-portal\/login/.test(url);
-  162 |     expect(hasError || stillOnLogin, 'admin should not be granted a client session').toBe(true);
-  163 |   });
-  164 | 
-  165 |   test('7. logout button works from the dashboard', async ({ page }) => {
-  166 |     await page.goto('/dashboard');
-  167 |     await page.waitForURL(/\/dashboard/, { timeout: 10_000 });
-  168 | 
-  169 |     const logoutBtn = page.getByTitle(/sign\s*out/i);
-  170 |     await expect(logoutBtn, 'logout button should exist on dashboard').toBeVisible();
-  171 |     await logoutBtn.click();
-  172 | 
-  173 |     await page.goto('/dashboard');
-  174 |     await page.waitForURL(/\/login/, { timeout: 5_000 });
-  175 |     await expect(page).toHaveURL(/\/login/);
-  176 |   });
-  177 | 
-  178 |   test('8. contact form posts successfully and persists', async ({ request }) => {
-  179 |     const res = await request.post('/api/contact', {
-  180 |       data: {
-  181 |         name: 'E2E Probe',
-  182 |         email: `e2e-${STAMP}@example.com`,
-  183 |         message: `Smoke test from Clio E2E. STAMP=${STAMP}. Please ignore.`,
-  184 |       },
-  185 |     });
-  186 |     expect(res.status()).toBe(200);
-  187 |     const body = await res.json();
-  188 |     expect(body.success).toBe(true);
-  189 |     expect(typeof body.id).toBe('string');
-  190 |     expect(body.emailSent).toBe(true);
-  191 |   });
-  192 | 
-  193 |   test('9. contact form rejects empty submissions', async ({ request }) => {
 ```

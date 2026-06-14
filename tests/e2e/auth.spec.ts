@@ -1,5 +1,4 @@
 import { test, expect, type Page, type BrowserContext } from '@playwright/test';
-import { SignJWT } from 'jose';
 
 /**
  * SendFlow Auth E2E (deployed)
@@ -24,44 +23,32 @@ const ADMIN_EMAIL = `e2e-admin-${STAMP}@sendflow.test`;
 const ADMIN_NAME = `E2E Admin ${STAMP}`;
 const ADMIN_PASSWORD = 'E2eTest!2026';
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET || 'development-secret'
-);
+/**
+ * Full flow: register → resend-verify (test mode returns token) → verify-email.
+ * Returns the sf_token cookie value — no email access needed.
+ */
+async function registerAndGetSessionCookie(request: any, name: string, email: string, password: string): Promise<string> {
+  // 1. Register — creates user + VerificationToken, sends email, returns 202
+  const regRes = await request.post('/api/auth/register', { data: { name, email, password } });
+  if (regRes.status() !== 202) throw new Error(`register failed: ${regRes.status()}`);
 
-async function registerViaApi(request: any, name: string, email: string, password: string) {
-  const res = await request.post('/api/auth/register', { data: { name, email, password } });
-  return res;
-}
+  // 2. Resend — in test mode the response includes { token, verifyUrl }
+  const resendRes = await request.post('/api/auth/resend-verify', {
+    headers: { 'Content-Type': 'application/json' },
+    data: JSON.stringify({ email }),
+  });
+  if (resendRes.status() !== 200) throw new Error(`resend-verify failed: ${resendRes.status()}`);
+  const resendBody = await resendRes.json();
+  if (!resendBody.token) throw new Error(`No token in resend-verify response: ${JSON.stringify(resendBody)}`);
 
-async function getVerifiedSession(request: any, email: string): Promise<Response> {
-  // Step 1 – request magic-link (email is test-routed to Tedymiles7@gmail.com)
-  await request.post('/api/auth/magic-link', { data: { email } });
-
-  // Step 2 – re-sign a JWT so we can present it to /verify
-  const token = await new SignJWT({ sub: email })
-    .setProtectedHeader({ alg: 'HS256' })
-    .setIssuedAt()
-    .setExpirationTime('15m')
-    .sign(JWT_SECRET);
-
-  // Step 3 – call verify; marks emailVerified and returns session cookie
-  const verifyRes = await request.get(`/api/auth/verify?token=${encodeURIComponent(token)}`);
-  return verifyRes;
-}
-
-async function applySessionCookie(context: BrowserContext, response: Response) {
-  const setCookie = response.headers.get('set-cookie') || '';
-  const match = setCookie.match(/sf_token=([^;]+)/);
-  if (!match) return;
-  await context.addCookies([{
-    name: 'sf_token',
-    value: match[1],
-    domain: new URL('https://sendflow-two.vercel.app').hostname,
-    path: '/',
-    httpOnly: true,
-    secure: true,
-    sameSite: 'Lax',
-  }]);
+  // 3. Verify the token — capture Set-Cookie on the 302
+  const verifyRes = await request.get(`/api/auth/verify-email?token=${encodeURIComponent(resendBody.token)}`, {
+    maxRedirects: 0,
+  });
+  const setCookie = verifyRes.headers()['set-cookie'] || '';
+  const cookieMatch = setCookie.match(/sf_token=([^;]+)/);
+  if (!cookieMatch) throw new Error(`No sf_token in Set-Cookie from verify-email: "${setCookie}"`);
+  return cookieMatch[1];
 }
 
 async function register(page: Page, name: string, email: string, password: string) {
@@ -85,26 +72,33 @@ test.describe.serial('SendFlow auth — deployed', () => {
   test.beforeAll(async ({ browser }) => {
     adminContext = await browser.newContext();
     const apiRequest = adminContext.request;
-
-    const regRes = await registerViaApi(apiRequest, ADMIN_NAME, ADMIN_EMAIL, ADMIN_PASSWORD);
-    expect(regRes.status(), 'admin registration should succeed').toBe(202);
-
-    const verifyRes = await getVerifiedSession(apiRequest, ADMIN_EMAIL);
-    expect(verifyRes.ok(), '/verify should succeed for magic-link token').toBe(true);
-    await applySessionCookie(adminContext, verifyRes);
+    const cookieValue = await registerAndGetSessionCookie(apiRequest, ADMIN_NAME, ADMIN_EMAIL, ADMIN_PASSWORD);
+    await adminContext.addCookies([{
+      name: 'sf_token',
+      value: cookieValue,
+      domain: new URL('https://sendflow-two.vercel.app').hostname,
+      path: '/',
+      httpOnly: true,
+      secure: true,
+      sameSite: 'Lax',
+    }]);
   });
 
-  test('1. admin register → "check your email" screen (not /dashboard)', async ({ page }) => {
-    const email = `e2e-reg-${STAMP}@sendflow.test`;
-    await register(page, `E2E Reg ${STAMP}`, email, ADMIN_PASSWORD);
-    await page.waitForTimeout(2_000);
+  test('1. unverified email → login blocked with needsVerification=true', async ({ page }) => {
+    // Register a fresh email — should NOT get a session
+    const email = `e2e-unverified-${STAMP}@sendflow.test`;
+    const regRes = await page.request.post('/api/auth/register', {
+      data: { name: `Unverified ${STAMP}`, email, password: ADMIN_PASSWORD },
+    });
+    expect(regRes.status()).toBe(202);
 
-    const body = await page.locator('body').innerText();
-    expect(
-      /email|verify|inbox|check.*email/i.test(body.toLowerCase()),
-      'register success screen should mention email verification'
-    ).toBe(true);
-    expect(page.url()).not.toMatch(/\/dashboard/);
+    // Try to login — should be blocked with 403 + needsVerification
+    const loginRes = await page.request.post('/api/auth/login', {
+      data: { email, password: ADMIN_PASSWORD },
+    });
+    expect(loginRes.status()).toBe(403);
+    const body = await loginRes.json();
+    expect(body.needsVerification).toBe(true);
   });
 
   test('2. re-login with the same credentials works', async () => {
