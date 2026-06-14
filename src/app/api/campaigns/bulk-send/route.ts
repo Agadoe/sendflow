@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createHash } from 'crypto';
+import { getSession } from '@/lib/auth';
+import { requirePlan } from '@/lib/plans';
 
 const DAEMON_URL = process.env.WACLI_DAEMON_URL || 'http://127.0.0.1:4555';
 
@@ -17,16 +19,20 @@ function cleanKeyCache() {
   KEY_CACHE.forEach((v, k) => { if (v.expiresAt < now) KEY_CACHE.delete(k); });
 }
 
-async function validateKey(rawKey: string): Promise<string | null> {
+async function validateKey(rawKey: string): Promise<{ userId: string; plan: string } | null> {
   if (!rawKey) return null;
   cleanKeyCache();
   const h = hashKey(rawKey);
   const cached = KEY_CACHE.get(h);
-  if (cached && cached.expiresAt > Date.now()) return cached.userId;
-  const dbKey = await prisma.apiKey.findFirst({ where: { key: rawKey }, select: { userId: true } });
+  if (cached && cached.expiresAt > Date.now()) return { userId: cached.userId, plan: 'FREE' };
+  const dbKey = await prisma.apiKey.findFirst({
+    where: { key: rawKey },
+    select: { userId: true, user: { select: { plan: true } } },
+  });
   if (!dbKey) return null;
+  const plan = dbKey.user?.plan ?? 'FREE';
   KEY_CACHE.set(h, { userId: dbKey.userId, expiresAt: Date.now() + KEY_CACHE_TTL_MS });
-  return dbKey.userId;
+  return { userId: dbKey.userId, plan };
 }
 
 function formatPhone(phone: string): string {
@@ -52,21 +58,26 @@ export async function POST(req: Request) {
   const request = req as NextRequest;
   const rawKey = request.headers.get('x-sendflow-key');
   let userId: string | null = null;
+  let userPlan: string = 'FREE';
 
+  // Try API key first (includes plan), fall back to session
   if (rawKey) {
-    userId = await validateKey(rawKey);
+    const keyResult = await validateKey(rawKey);
+    if (keyResult) { userId = keyResult.userId; userPlan = keyResult.plan; }
   }
   if (!userId) {
-    const cookieHeader = request.headers.get('cookie');
-    const match = cookieHeader?.match(/sf_token=([^;]+)/);
-    if (match) {
-      try {
-        const payload = JSON.parse(Buffer.from(match[1].split('.')[1], 'base64').toString());
-        userId = payload.sub || null;
-      } catch { /* invalid token */ }
-    }
+    const session = await getSession(request);
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    userId = session.id;
+    userPlan = session.plan;
   }
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  // Plan gate — bulk send is a paid feature
+  try {
+    requirePlan(userPlan, 'bulkSend');
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message }, { status: e.status });
+  }
 
   try {
     const { name, content, tags, contactIds } = await req.json();
