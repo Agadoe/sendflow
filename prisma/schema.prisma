@@ -40,6 +40,7 @@ model User {
   teamMembers   TeamMember[]
   clickToWhatsAppLinks ClickToWhatsAppLink[]
   whatsAppForms       WhatsAppForm[]
+  leadAttribution     LeadAttribution?
   dripScheduledMessages DripScheduledMessage[]
 }
 
@@ -375,4 +376,20 @@ model InboundEmail {
   @@index([fromAddress])
   @@index([read])
   @@index([messageId])
+}
+
+// Lead attribution — persists UTM and referral params from registration URL.
+// Written once at account creation; read-only after (shown on dashboard).
+model LeadAttribution {
+  id         String   @id @default(cuid())
+  userId     String   @unique  // one attribution record per user
+  source     String?  // utm_source: e.g. "telegram", "jiji", "jiji.com.gh", "google", "baahee_bot"
+  medium     String?  // utm_medium: e.g. "referral", "cpc", "organic", "cta_button"
+  campaign   String?  // utm_campaign: e.g. "sendflow-waitlist", "malejor-q2"
+  ref        String?  // ?ref= param: e.g. "leadops", "bot", "wa_cta"
+  referrer   String?  // raw HTTP Referer header
+  landingUrl String?  // first page they visited
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

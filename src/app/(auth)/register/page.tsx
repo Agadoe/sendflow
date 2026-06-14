@@ -1,19 +1,26 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 
-export default function RegisterPage() {
+function RegisterForm() {
+  const searchParams = useSearchParams();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const router = useRouter();
-
   const [step, setStep] = useState<'form' | 'done'>('form');
   const [registeredEmail, setRegisteredEmail] = useState('');
+
+  // Capture UTM / referral params at render time
+  const attribution = {
+    source: searchParams.get('utm_source') || searchParams.get('ref') || null,
+    medium: searchParams.get('utm_medium') || null,
+    campaign: searchParams.get('utm_campaign') || null,
+    ref: searchParams.get('ref') || null,
+  };
 
   async function handleRegister(e: React.FormEvent) {
     e.preventDefault();
@@ -24,7 +31,7 @@ export default function RegisterPage() {
       const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, password }),
+        body: JSON.stringify({ name, email, password, attribution }),
       });
 
       const data = await res.json();
@@ -154,5 +161,13 @@ export default function RegisterPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={null}>
+      <RegisterForm />
+    </Suspense>
   );
 }

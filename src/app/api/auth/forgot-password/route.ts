@@ -80,7 +80,7 @@ export async function POST(req: Request) {
           you can safely ignore this email — your password won't change.
         </p>
       `,
-      testMode: true,
+      testMode: false,
     });
 
     if (!result.ok) {

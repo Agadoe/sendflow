@@ -20,7 +20,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { name, email, password } = await req.json();
+    const { name, email, password, attribution } = await req.json();
     if (!email || !name || !password) {
       return NextResponse.json({ error: 'Name, email, and password required' }, { status: 400 });
     }
@@ -35,6 +35,12 @@ export async function POST(req: Request) {
 
     const passwordHash = await bcrypt.hash(password, 12);
 
+    // Capture UTM/referral params if provided
+    const utmSource = attribution?.source || null;
+    const utmMedium = attribution?.medium || null;
+    const utmCampaign = attribution?.campaign || null;
+    const ref = attribution?.ref || null;
+
     // Create user with email NOT verified — they must click the verify link first.
     const user = await prisma.user.create({
       data: {
@@ -47,6 +53,20 @@ export async function POST(req: Request) {
       },
       select: { id: true, email: true, name: true, emailVerified: true },
     });
+
+    // Persist attribution data if any params were captured
+    if (utmSource || utmMedium || utmCampaign || ref) {
+      await prisma.leadAttribution.create({
+        data: {
+          userId: user.id,
+          source: utmSource,
+          medium: utmMedium,
+          campaign: utmCampaign,
+          ref,
+          landingUrl: attribution?.landingUrl || null,
+        },
+      });
+    }
 
     // Issue a secure random token valid for 1 hour.
     const token = randomBytes(32).toString('hex');
@@ -91,7 +111,7 @@ export async function POST(req: Request) {
           SendFlow account, you can safely ignore this email.
         </p>
       `,
-      testMode: true, // test mode ON by default — flip MAGIC_LINK_TEST_MODE=false to disable
+      testMode: false, // production — real emails sent to real addresses
     });
 
     if (!result.ok) {
