@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { Toaster } from 'react-hot-toast';
 
 const navItems = [
   {
@@ -253,6 +254,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* Page content */}
         <main className="flex-1 p-4 md:p-8">
           {children}
+          <Toaster position="top-right" />
         </main>
       </div>
     </div>
