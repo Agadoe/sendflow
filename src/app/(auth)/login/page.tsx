@@ -1,14 +1,23 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useState, type ReactNode } from 'react';
+
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 
-export default function LoginPage() {
+function safeRedirect(target: string | null, fallback: string): string {
+  if (!target) return fallback;
+  // Open-redirect guard: must be a same-origin path starting with `/` (not `//` or `http`)
+  if (!target.startsWith('/') || target.startsWith('//')) return fallback;
+  return target;
+}
+
+function LoginForm() {
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<ReactNode>('');
   const router = useRouter();
 
   async function handleLogin(e: React.FormEvent) {
@@ -26,12 +35,36 @@ export default function LoginPage() {
       const data = await res.json();
 
       if (!res.ok) {
+        if (data.needsVerification) {
+          setError(
+            <span>
+              Please verify your email first.{' '}
+              <button
+                type="button"
+                className="underline hover:no-underline"
+                onClick={async () => {
+                  if (!email) return;
+                  await fetch('/api/auth/resend-verify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email }),
+                  });
+                  setError('Verification email resent. Check your inbox.');
+                }}
+              >
+                Resend verification email
+              </button>
+            </span>
+          );
+          return;
+        }
         setError(data.error || 'Login failed');
         return;
       }
 
-      // Redirect to dashboard
-      router.push('/dashboard');
+      // Honor ?redirect= (set by middleware) but only if it's a same-origin path
+      const redirectTo = safeRedirect(searchParams.get('redirect'), '/dashboard');
+      router.push(redirectTo);
       router.refresh();
     } catch {
       setError('Network error. Try again.');
@@ -104,8 +137,23 @@ export default function LoginPage() {
               Sign up free
             </Link>
           </div>
+
+          <div className="mt-3 text-center">
+            <Link href="/forgot-password" className="text-xs text-slate-light hover:text-slate hover:underline">
+              Forgot your password?
+            </Link>
+          </div>
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  // useSearchParams() requires a Suspense boundary in Next.js
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
   );
 }

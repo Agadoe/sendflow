@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { NextRequest } from 'next/server';
+import { PLANS, checkContactLimit } from '@/lib/plans';
 
 const KEY_CACHE = new Map<string, string>();
 import { createHash } from 'crypto';
@@ -54,6 +55,18 @@ export async function POST(req: Request) {
     const { contacts } = await req.json();
     if (!Array.isArray(contacts)) {
       return NextResponse.json({ error: 'contacts array required' }, { status: 400 });
+    }
+
+    const overage = await checkContactLimit(userId!, contacts.length, prisma);
+    if (overage > 0) {
+      const plan = (await prisma.user.findUnique({ where: { id: userId! }, select: { plan: true } }))?.plan ?? 'FREE';
+      const max = PLANS[plan as keyof typeof PLANS]?.maxContacts ?? 100;
+      return NextResponse.json({
+        error: `Contact limit reached. Your ${plan} plan allows ${max} contacts. This import would add ${overage} over the limit.`,
+        code: 'CONTACT_LIMIT_EXCEEDED',
+        current: max,
+        overage,
+      }, { status: 403 });
     }
 
     const results = { created: 0, skipped: 0, errors: [] as string[] };

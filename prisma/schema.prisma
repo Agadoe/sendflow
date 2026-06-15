@@ -15,24 +15,34 @@ model User {
   phone         String?
   plan          String    @default("FREE")
   passwordHash  String?
-  emailVerified DateTime? @default(now())
+  emailVerified DateTime?
   isOwner       Boolean   @default(false)
+  role          String    @default("CLIENT") // ADMIN | CLIENT
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  campaigns   Campaign[]
-  contacts    Contact[]
-  payments    Payment[]
-  apiKeys     ApiKey[]
-  sessions    Session[]
-  accounts    Account[]
-  automations     Automation[]
-  leads          Lead[]
-  leadActivities LeadActivity[]
-  teamMembers   TeamMember[]
-  clickToWhatsAppLinks ClickToWhatsAppLink[]
-  whatsAppForms       WhatsAppForm[]
+  // Multi-tenant wacli session fields
+  wacliSessionId       String? // Unique identifier for this user's wacli session
+  wacliStatus          String? // DISCONNECTED | QR_READY | AUTHENTICATED | ERROR
+  wacliPhone           String? // WhatsApp phone number once connected
+  wacliLastConnectedAt DateTime? // Timestamp of last successful connection
+  wacliQrCode          String? // Transient QR code for re-display during auth flow
+
+  campaigns             Campaign[]
+  contacts              Contact[]
+  payments              Payment[]
+  apiKeys               ApiKey[]
+  sessions              Session[]
+  accounts              Account[]
+  automations           Automation[]
+  leads                 Lead[]
+  leadActivities        LeadActivity[]
+  teamMembers           TeamMember[]
+  clickToWhatsAppLinks  ClickToWhatsAppLink[]
+  whatsAppForms         WhatsAppForm[]
+  leadAttribution       LeadAttribution?
   dripScheduledMessages DripScheduledMessage[]
+  OutboundMessage       OutboundMessage[]
 }
 
 model Account {
@@ -79,9 +89,9 @@ model Campaign {
   status      String    @default("DRAFT")
   scheduledAt DateTime?
   sentAt      DateTime?
-  recurrence  String?   // DAILY | WEEKLY | MONTHLY | null
+  recurrence  String? // DAILY | WEEKLY | MONTHLY | null
   createdAt   DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  updatedAt   DateTime  @updatedAt
 
   user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   messages Message[]
@@ -102,7 +112,6 @@ model Message {
   contact  Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
 }
 
-
 model Contact {
   id        String   @id @default(cuid())
   userId    String
@@ -111,8 +120,8 @@ model Contact {
   tags      String   @default("[]")
   createdAt DateTime @default(now())
 
-  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  messages Message[]
+  user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages              Message[]
   dripScheduledMessages DripScheduledMessage[]
 }
 
@@ -136,6 +145,40 @@ model Waitlist {
   phone        String?
   wantsCall    Boolean  @default(false)
   createdAt    DateTime @default(now())
+
+  submissions WaitlistSubmission[]
+}
+
+// Permanent submission audit log — survives Mailchimp failures and lets us
+// backfill or re-sync without losing data. Email + phone uniqueness is
+// enforced at the application layer because the same person may submit with
+// different emails but the same phone (or vice versa).
+model WaitlistSubmission {
+  id                String    @id @default(cuid())
+  waitlistId        String?
+  email             String
+  name              String
+  phone             String
+  phoneE164         String
+  businessType      String?
+  wantsCall         Boolean   @default(false)
+  source            String    @default("landing") // landing | telegram | api
+  ip                String?
+  userAgent         String?
+  // Sync status across destinations
+  mailchimpStatus   String    @default("pending") // pending | synced | failed
+  mailchimpError    String?
+  mailchimpSyncedAt DateTime?
+  telegramStatus    String    @default("pending") // pending | synced | failed | skipped
+  telegramError     String?
+  telegramSyncedAt  DateTime?
+  createdAt         DateTime  @default(now())
+
+  waitlist Waitlist? @relation(fields: [waitlistId], references: [id], onDelete: SetNull)
+
+  @@index([email])
+  @@index([phone])
+  @@index([createdAt])
 }
 
 model ApiKey {
@@ -162,8 +205,8 @@ model Automation {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  user       User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  executions AutomationExecution[]
+  user         User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  executions   AutomationExecution[]
   dripMessages DripScheduledMessage[]
 }
 
@@ -182,55 +225,99 @@ model LeadActivity {
   id        String   @id @default(cuid())
   leadId    String
   userId    String
-  type      String
+  type      String // note | call | email | whatsapp | stage_change | score_update | enrichment
   content   String
+  metadata  String   @default("{}") // JSON — holds extra context (duration, channel, etc.)
   createdAt DateTime @default(now())
 
   lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-model Lead {
-  id           String   @id @default(cuid())
-  userId       String
-  name         String
-  email        String?
-  phone        String?
-  company      String?
-  stage        String   @default("NEW")
-  source      String?
-  notes       String   @default("")
-  nextFollowUp DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+// Tracks every outbound message sent to a lead via any channel
+model OutboundMessage {
+  id            String    @id @default(cuid())
+  leadId        String
+  userId        String
+  channel       String // whatsapp | email | sms | telegram
+  content       String // The message sent
+  status        String    @default("PENDING") // PENDING | SENT | DELIVERED | READ | REPLIED | FAILED | BOUNCED
+  sentAt        DateTime?
+  deliveredAt   DateTime?
+  readAt        DateTime?
+  repliedAt     DateTime?
+  failureReason String?
+  externalId    String? // Provider message ID (WhatsApp message ID, email Message-ID, etc.)
+  metadata      String    @default("{}") // JSON — provider response, media URLs, etc.
+  createdAt     DateTime  @default(now())
 
-  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  activities LeadActivity[]
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Lead {
+  id                String    @id @default(cuid())
+  userId            String
+  name              String
+  email             String?
+  phone             String?
+  company           String?
+  stage             String    @default("SCOUTED") // SCOUTED | QUALIFIED | CONTACTED | PROPOSAL | NEGOTIATING | CONVERTED | CLOSED
+  source            String?
+  notes             String    @default("[]") // JSON array of note objects [{text, author, createdAt}]
+  nextFollowUp      DateTime?
+  // CRM fields
+  score             Int       @default(0) // 0-100 ICP score from scout engine
+  scoreBreakdown    String    @default("{}") // JSON {profile, affluence, contact, intent}
+  dealValue         Int? // Estimated deal value in Ghana Cedis
+  contactCount      Int       @default(0) // Number of outreach touches
+  lastContactedAt   DateTime?
+  convertedAt       DateTime?
+  convertedValue    Int? // Actual closed deal value
+  tags              String    @default("[]") // JSON array ["hot", "follow-up", "referral"]
+  // Enrichment fields (populated by enrichment step)
+  jobTitle          String?
+  industry          String?
+  linkedinUrl       String?
+  website           String?
+  address           String?
+  // ICP context — saved from scout request for audit
+  icpBusinessType   String?
+  icpTargetCustomer String?
+  // Outreach tracking
+  outreachStatus    String    @default("PENDING") // PENDING | SENT | DELIVERED | REPLIED | CONVERTED | FAILED
+  lastOutreachAt    DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activities      LeadActivity[]
+  OutboundMessage OutboundMessage[]
 }
 
 model TeamMember {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   userId    String
   email     String
-  role      String   @default("EDITOR") // ADMIN | EDITOR | VIEWER
+  role      String    @default("EDITOR") // ADMIN | EDITOR | VIEWER
   invitedBy String?
-  token     String?  // magic invite token
-  invitedAt DateTime @default(now())
+  token     String? // magic invite token
+  invitedAt DateTime  @default(now())
   joinedAt  DateTime?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model ClickToWhatsAppLink {
-  id         String   @id @default(cuid())
-  userId     String
-  name      String
-  phone     String
-  prefillMsg String?
-  utmSource String?
-  utmMedium String?
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  phone       String
+  prefillMsg  String?
+  utmSource   String?
+  utmMedium   String?
   utmCampaign String?
-  createdAt DateTime @default(now())
+  createdAt   DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
@@ -247,7 +334,7 @@ model WhatsAppForm {
   isActive   Boolean  @default(true)
   createdAt  DateTime @default(now())
 
-  user       User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
   submissions WhatsAppFormSubmission[]
 }
 
@@ -266,17 +353,86 @@ model DripScheduledMessage {
   id            String    @id @default(cuid())
   userId        String
   contactId     String
-  automationId  String?   // which automation triggered this (optional)
+  automationId  String? // which automation triggered this (optional)
   channel       String    @default("whatsapp") // whatsapp | email | sms
-  template      String    // message content
-  scheduledFor  DateTime  // when to send
+  template      String // message content
+  scheduledFor  DateTime // when to send
   status        String    @default("PENDING") // PENDING | SENT | FAILED | CANCELLED
   sentAt        DateTime?
   failureReason String?
   sequenceOrder Int       @default(0) // order within the drip sequence
   createdAt     DateTime  @default(now())
 
-  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  contact    Contact    @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contact    Contact     @relation(fields: [contactId], references: [id], onDelete: Cascade)
   automation Automation? @relation(fields: [automationId], references: [id], onDelete: SetNull)
+}
+
+model ContactMessage {
+  id         String    @id @default(cuid())
+  name       String
+  email      String
+  phone      String?
+  subject    String?
+  message    String
+  ip         String?
+  userAgent  String?
+  read       Boolean   @default(false)
+  readAt     DateTime?
+  readBy     String?
+  // Whether the notification email was sent successfully
+  emailSent  Boolean   @default(false)
+  emailError String?
+  createdAt  DateTime  @default(now())
+
+  @@index([createdAt])
+  @@index([read])
+}
+
+// InboundEmail — IMAP inbox mirror for sendflow@baahe.org.
+// Polled by /api/cron/fetch-mail (Vercel cron).
+// See prisma/migrations/20260606_inbound_email_inbox/migration.sql
+model InboundEmail {
+  id               String    @id @default(cuid())
+  uid              Int
+  mailbox          String    @default("INBOX")
+  messageId        String?
+  fromAddress      String
+  fromName         String?
+  toAddress        String
+  cc               String?
+  subject          String?
+  sentAt           DateTime?
+  receivedAt       DateTime?
+  textBody         String?
+  htmlBody         String?
+  snippet          String    @default("")
+  attachments      String? // JSON array
+  read             Boolean   @default(false)
+  readAt           DateTime?
+  readBy           String?
+  matchedContactId String?
+  fetchedAt        DateTime  @default(now())
+
+  @@unique([mailbox, uid])
+  @@index([receivedAt])
+  @@index([fromAddress])
+  @@index([read])
+  @@index([messageId])
+}
+
+// Lead attribution — persists UTM and referral params from registration URL.
+// Written once at account creation; read-only after (shown on dashboard).
+model LeadAttribution {
+  id         String   @id @default(cuid())
+  userId     String   @unique // one attribution record per user
+  source     String? // utm_source: e.g. "telegram", "jiji", "jiji.com.gh", "google", "baahee_bot"
+  medium     String? // utm_medium: e.g. "referral", "cpc", "organic", "cta_button"
+  campaign   String? // utm_campaign: e.g. "sendflow-waitlist", "malejor-q2"
+  ref        String? // ?ref= param: e.g. "leadops", "bot", "wa_cta"
+  referrer   String? // raw HTTP Referer header
+  landingUrl String? // first page they visited
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

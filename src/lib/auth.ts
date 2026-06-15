@@ -1,9 +1,10 @@
 import { jwtVerify, SignJWT } from 'jose';
 import { NextRequest } from 'next/server';
+import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 
 const JWT_SECRET = new TextEncoder().encode(
-  process.env.NEXTAUTH_SECRET || 'development-secret'
+  process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET || 'development-secret'
 );
 
 export interface SessionUser {
@@ -35,7 +36,6 @@ function buildSession(user: {
     isOwner: user.isOwner,
   };
 }
-
 /**
  * Extract and verify the sf_token cookie, returning the session user with role.
  */
@@ -49,23 +49,12 @@ export async function getSession(req: NextRequest): Promise<SessionUser | null> 
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, email: true, name: true, plan: true, isOwner: true },
+      select: { id: true, email: true, name: true, plan: true, isOwner: true, role: true },
     });
 
     if (!user) return null;
 
-    // Owner: no TeamMember lookup needed
-    if (user.isOwner) {
-      return buildSession({ ...user, role: 'OWNER' });
-    }
-
-    // Team member: look up their role
-    const membership = await prisma.teamMember.findFirst({
-      where: { userId },
-      select: { role: true },
-    });
-
-    return buildSession({ ...user, role: membership?.role ?? 'VIEWER' });
+    return buildSession(user);
   } catch {
     return null;
   }
@@ -105,4 +94,31 @@ export async function requireRole(req: NextRequest, minRole: SessionUser['role']
     });
   }
   return session;
+}
+
+/**
+ * Convenience: read the session from the current request's cookies via
+ * next/headers. Use this in route handlers that don't already receive a
+ * NextRequest. Returns null if no valid session.
+ */
+export async function getCurrentUser(): Promise<SessionUser | null> {
+  const cookieStore = await cookies();
+  const token = cookieStore.get('sf_token')?.value;
+  if (!token) return null;
+
+  try {
+    const { payload } = await jwtVerify(token, JWT_SECRET);
+    const userId = payload.sub as string;
+    if (!userId) return null;
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true, name: true, plan: true, isOwner: true, role: true },
+    });
+    if (!user) return null;
+
+    return buildSession(user);
+  } catch {
+    return null;
+  }
 }

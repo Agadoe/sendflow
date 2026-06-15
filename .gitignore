@@ -9,3 +9,11 @@ node_modules/
 vercel.json
 .vercel
 .env*.local
+
+.env
+.env.bak
+.env.local
+
+# Build artifacts (added 2026-06-05)
+.next/trace
+tsconfig.tsbuildinfo

@@ -30,6 +30,8 @@ export async function POST(req: Request) {
   results.drip = { found: dueMessages.length, sent: 0, failed: 0 };
 
   for (const msg of dueMessages) {
+    let status = 'FAILED';
+    let failureReason = '';
     try {
       if (msg.channel === 'whatsapp') {
         await sendWhatsApp(msg.userId, msg.contact.phone, msg.template);
@@ -38,19 +40,16 @@ export async function POST(req: Request) {
       } else if (msg.channel === 'sms') {
         await sendSms(msg.userId, msg.contact.phone, msg.template);
       }
-
-      await prisma.dripScheduledMessage.update({
-        where: { id: msg.id },
-        data: { status: 'SENT', sentAt: new Date() },
-      });
+      status = 'SENT';
       results.drip.sent++;
     } catch (err: any) {
-      await prisma.dripScheduledMessage.update({
-        where: { id: msg.id },
-        data: { status: 'FAILED', failureReason: err.message },
-      });
+      failureReason = err.message;
       results.drip.failed++;
     }
+    await prisma.dripScheduledMessage.update({
+      where: { id: msg.id },
+      data: { status, sentAt: status === 'SENT' ? new Date() : null, failureReason: failureReason || null },
+    });
   }
 
   // ── 2. Recurring campaigns due today ─────────────────────────────────────

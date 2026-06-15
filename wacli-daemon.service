@@ -1,0 +1,18 @@
+[Unit]
+Description=SendFlow wacli WhatsApp Daemon
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/tmp/wacli-daemon
+ExecStart=/usr/bin/node wacli-daemon.js
+Environment=WACLI_PORT=4555
+Environment=NODE_PATH=/tmp/wacli-daemon/node_modules
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

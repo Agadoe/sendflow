@@ -1,16 +1,26 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 
-export default function RegisterPage() {
+function RegisterForm() {
+  const searchParams = useSearchParams();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const router = useRouter();
+  const [step, setStep] = useState<'form' | 'done'>('form');
+  const [registeredEmail, setRegisteredEmail] = useState('');
+
+  // Capture UTM / referral params at render time
+  const attribution = {
+    source: searchParams.get('utm_source') || searchParams.get('ref') || null,
+    medium: searchParams.get('utm_medium') || null,
+    campaign: searchParams.get('utm_campaign') || null,
+    ref: searchParams.get('ref') || null,
+  };
 
   async function handleRegister(e: React.FormEvent) {
     e.preventDefault();
@@ -21,7 +31,7 @@ export default function RegisterPage() {
       const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, password }),
+        body: JSON.stringify({ name, email, password, attribution }),
       });
 
       const data = await res.json();
@@ -31,8 +41,8 @@ export default function RegisterPage() {
         return;
       }
 
-      router.push('/dashboard');
-      router.refresh();
+      setRegisteredEmail(email);
+      setStep('done');
     } catch {
       setError('Network error. Try again.');
     } finally {
@@ -56,67 +66,91 @@ export default function RegisterPage() {
         </div>
 
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-          <form onSubmit={handleRegister} className="space-y-4">
-            <div>
-              <label className="block text-xs font-medium text-slate-light mb-1.5">Full Name</label>
-              <input
-                type="text"
-                value={name}
-                onChange={e => setName(e.target.value)}
-                placeholder="Esther Mensah"
-                required
-                className="w-full px-4 py-3 border border-gray-200 rounded-btn text-sm text-slate placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber/40"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-slate-light mb-1.5">Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                required
-                className="w-full px-4 py-3 border border-gray-200 rounded-btn text-sm text-slate placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber/40"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-slate-light mb-1.5">Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                placeholder="Min. 8 characters"
-                required
-                minLength={8}
-                className="w-full px-4 py-3 border border-gray-200 rounded-btn text-sm text-slate placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber/40"
-              />
-            </div>
-
-            {error && (
-              <div className="bg-red-50 border border-red-100 text-red-600 text-sm px-4 py-3 rounded-btn">
-                {error}
+          {step === 'form' ? (
+            <form onSubmit={handleRegister} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-light mb-1.5">Full Name</label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  placeholder="Esther Mensah"
+                  required
+                  className="w-full px-4 py-3 border border-gray-200 rounded-btn text-sm text-slate placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber/40"
+                />
               </div>
-            )}
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-3 bg-amber text-white font-semibold rounded-btn hover:bg-amber-dark transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
-            >
-              {loading ? (
-                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              ) : 'Create Account'}
-            </button>
+              <div>
+                <label className="block text-xs font-medium text-slate-light mb-1.5">Email</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  required
+                  className="w-full px-4 py-3 border border-gray-200 rounded-btn text-sm text-slate placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber/40"
+                />
+              </div>
 
-            <p className="text-xs text-center text-slate-light">
-              By signing up you agree to our{' '}
-              <a href="#" className="text-amber hover:underline">Terms of Service</a>
-              {' '}and{' '}
-              <a href="#" className="text-amber hover:underline">Privacy Policy</a>
-            </p>
-          </form>
+              <div>
+                <label className="block text-xs font-medium text-slate-light mb-1.5">Password</label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  placeholder="Min. 8 characters"
+                  required
+                  minLength={8}
+                  className="w-full px-4 py-3 border border-gray-200 rounded-btn text-sm text-slate placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber/40"
+                />
+              </div>
+
+              {error && (
+                <div className="bg-red-50 border border-red-100 text-red-600 text-sm px-4 py-3 rounded-btn">
+                  {error}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-3 bg-amber text-white font-semibold rounded-btn hover:bg-amber-dark transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+              >
+                {loading ? (
+                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : 'Create Account'}
+              </button>
+
+              <p className="text-xs text-center text-slate-light">
+                By signing up you agree to our{' '}
+                <a href="#" className="text-amber hover:underline">Terms of Service</a>
+                {' '}and{' '}
+                <a href="#" className="text-amber hover:underline">Privacy Policy</a>
+              </p>
+            </form>
+          ) : (
+            <div className="text-center py-4">
+              <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-green-50 mb-4">
+                <svg className="w-7 h-7 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <h2 className="font-heading text-xl text-slate mb-2">Check your email</h2>
+              <p className="text-sm text-slate-light mb-1">
+                We sent a verification link to
+              </p>
+              <p className="text-sm font-medium text-slate mb-6">{registeredEmail}</p>
+              <p className="text-xs text-slate-light mb-6">
+                Click the link in the email to activate your account. The link expires in 1 hour.
+              </p>
+              <button
+                onClick={() => { setStep('form'); setEmail(''); setName(''); setPassword(''); }}
+                className="text-sm text-amber hover:underline"
+              >
+                Use a different email address
+              </button>
+            </div>
+          )}
 
           <div className="mt-4 text-center text-sm text-slate-light">
             Already have an account?{' '}
@@ -127,5 +161,13 @@ export default function RegisterPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={null}>
+      <RegisterForm />
+    </Suspense>
   );
 }
