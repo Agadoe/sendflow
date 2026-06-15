@@ -99,14 +99,16 @@ export async function sendMail(opts: SendMailOptions): Promise<SendMailResult> {
   if (resend) {
     try {
       const recipients = Array.isArray(to) ? to : [to];
-      const { data, error } = await resend.emails.send({
-        from: `${FROM_NAME} <${FROM_EMAIL}>`,
-        to: recipients,
-        subject,
-        text: opts.text,
-        html: opts.html,
-        replyTo: opts.replyTo,
-      });
+      // The early guard above guarantees at least one of text/html is defined.
+      // Build the payload in two steps so TS can narrow the union correctly.
+      const emailPayload: { to: string[]; from: string; subject: string; replyTo?: string } & (
+        | { text: string; html?: string }
+        | { html: string; text?: string }
+      ) = opts.html
+        ? { to: recipients, from: `${FROM_NAME} <${FROM_EMAIL}>`, subject, replyTo: opts.replyTo, text: opts.text ?? undefined, html: opts.html }
+        : { to: recipients, from: `${FROM_NAME} <${FROM_EMAIL}>`, subject, replyTo: opts.replyTo, text: opts.text! };
+
+      const { data, error } = await resend.emails.send(emailPayload);
       if (error) {
         return { ok: false, error: error.message, deliveredTo: to };
       }
