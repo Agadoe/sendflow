@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import DOMPurify from 'dompurify';
 import toast, { Toaster } from 'react-hot-toast';
 
 interface InboundEmail {
@@ -307,7 +308,7 @@ export default function InboxPage() {
                 {selected.htmlBody ? (
                   <div
                     className="email-html"
-                    dangerouslySetInnerHTML={{ __html: selected.htmlBody }}
+                    dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(selected.htmlBody) }}
                   />
                 ) : selected.textBody ? (
                   <pre className="whitespace-pre-wrap font-sans text-sm">{selected.textBody}</pre>

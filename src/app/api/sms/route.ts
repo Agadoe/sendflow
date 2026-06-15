@@ -1,12 +1,17 @@
 import { NextResponse } from 'next/server';
+import { jwtVerify } from 'jose';
 
-function getUserIdFromCookie(cookieHeader: string | null): string | null {
+const JWT_SECRET = new TextEncoder().encode(
+  process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET || 'development-secret'
+);
+
+async function getUserIdFromCookie(cookieHeader: string | null): Promise<string | null> {
   if (!cookieHeader) return null;
   const match = cookieHeader.match(/sf_token=([^;]+)/);
   if (!match) return null;
   try {
-    const payload = JSON.parse(Buffer.from(match[1].split('.')[1], 'base64').toString());
-    return payload.sub || null;
+    const { payload } = await jwtVerify(match[1], JWT_SECRET);
+    return payload.sub as string;
   } catch {
     return null;
   }
@@ -14,7 +19,7 @@ function getUserIdFromCookie(cookieHeader: string | null): string | null {
 
 export async function POST(req: Request) {
   const cookieHeader = req.headers.get('cookie');
-  const userId = getUserIdFromCookie(cookieHeader);
+  const userId = await getUserIdFromCookie(cookieHeader);
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const apiKey = process.env.TERMII_API_KEY;

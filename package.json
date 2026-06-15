@@ -16,6 +16,7 @@
     "@prisma/adapter-libsql": "^5.22.0",
     "@prisma/client": "^5.22.0",
     "bcryptjs": "^2.4.3",
+    "dompurify": "^3.4.10",
     "imapflow": "^1.3.6",
     "jose": "^5.9.3",
     "mailparser": "^3.9.9",
@@ -33,6 +34,7 @@
   "devDependencies": {
     "@playwright/test": "^1.60.0",
     "@types/bcryptjs": "^2.4.6",
+    "@types/dompurify": "^3.0.5",
     "@types/mailparser": "^3.4.6",
     "@types/node": "^20.17.6",
     "@types/nodemailer": "^8.0.0",
