@@ -2,12 +2,14 @@
 
 import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
+import QRCode from 'qrcode';
 
 type WacliState = 'DISCONNECTED' | 'QR_READY' | 'CONNECTED' | 'ERROR' | string;
 
 export default function WacliConnectPage() {
   const [connected, setConnected] = useState(false);
   const [checking, setChecking] = useState(true);
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [state, setState] = useState<WacliState>('DISCONNECTED');
   const [phone, setPhone] = useState<string | null>(null);
@@ -71,8 +73,18 @@ export default function WacliConnectPage() {
       const qrRes = await fetch('/api/wacli/connect', { cache: 'no-store' });
       const qrData = await qrRes.json();
       toast.dismiss('qr');
+      if (!qrRes.ok) {
+        toast.error(qrData.error || 'Failed to fetch QR');
+        return;
+      }
 
       if (qrData.qr) {
+        const dataUrl = await QRCode.toDataURL(qrData.qr, {
+          width: 280,
+          margin: 2,
+          color: { dark: '#000000', light: '#ffffff' },
+        });
+        setQrDataUrl(dataUrl);
         setQrCode(qrData.qr);
         setState('QR_READY');
         setPolling(true);
@@ -186,9 +198,11 @@ export default function WacliConnectPage() {
             </div>
 
             <div className="bg-white border border-gray-200 rounded-lg p-6 flex flex-col items-center gap-3">
-              <div className="text-xs text-slate-light font-mono break-all max-w-full text-center">
-                {qrCode.slice(0, 80)}…
-              </div>
+              {qrDataUrl ? (
+                <img src={qrDataUrl} alt="WhatsApp QR Code" className="w-64 h-64" />
+              ) : (
+                <div className="w-64 h-64 bg-gray-50 animate-pulse rounded flex items-center justify-center text-sm text-gray-400">Generating…</div>
+              )}
               <div className="text-xs text-amber font-medium">Waiting for scan…</div>
               <div className="flex items-center gap-2 text-xs text-slate-light">
                 <span className="w-2 h-2 border-2 border-amber/30 border-t-amber rounded-full animate-spin" />
