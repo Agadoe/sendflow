@@ -1,39 +1,44 @@
 /**
- * SendFlow email client — wraps nodemailer for the cPanel baahe.org mailbox.
+ * SendFlow email client — Resend for production, nodemailer for local dev.
+ *
+ * Production path (RESEND_API_KEY set): uses Resend API (bypasses Vercel
+ * serverless SMTP restrictions). Free tier = 100 emails/day.
+ *
+ * Local/dev path (no RESEND_API_KEY): falls back to nodemailer + baahe.org
+ * cPanel SMTP (the original behaviour).
  *
  * Used by /api/auth/magic-link, /api/contact, /api/kgc-contact, and (soon)
  * the waitlist drip + email-verification flow.
  *
- * Env vars (all optional — defaults match the verified production setup from
- * MEMORY.md 2026-06-06):
- *   SMTP_HOST          — default: mail.baahe.org
- *   SMTP_PORT          — default: 465
- *   SMTP_SECURE        — default: true (TLS on connect)
- *   SMTP_USER          — default: sendflow@baahe.org
- *   SMTP_PASS          — required in production
- *   FROM_NAME          — default: "SendFlow"
- *   FROM_EMAIL         — default: sendflow@baahe.org
+ * Env vars:
+ *   RESEND_API_KEY        — Resend API key (production, Resend free tier)
+ *   SMTP_HOST             — nodemailer fallback: default mail.baahe.org
+ *   SMTP_PORT             — nodemailer fallback: default 465
+ *   SMTP_SECURE           — nodemailer fallback: default true
+ *   SMTP_USER             — nodemailer fallback: default sendflow@baahe.org
+ *   SMTP_PASS             — nodemailer fallback: required in production
+ *   FROM_NAME             — default: "SendFlow"
+ *   FROM_EMAIL            — default: sendflow@baahe.org
  *
  * Test rule: every test email routes to Tedymiles7@gmail.com first.
  */
 
 import nodemailer from 'nodemailer';
 
+// ── Resend (production) ───────────────────────────────────────────────────────
+import { Resend } from 'resend';
+
+const RESEND_API_KEY = process.env.RESEND_API_KEY;
+const resend = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null;
+
+// ── nodemailer (local dev fallback) ──────────────────────────────────────────
 const SMTP_HOST = process.env.SMTP_HOST || 'mail.baahe.org';
 const SMTP_PORT = Number(process.env.SMTP_PORT || 465);
 const SMTP_SECURE = process.env.SMTP_SECURE !== 'false'; // default true
-// cPanel exports sometimes include a literal "\n" at the end of secrets
-// (escape sequence, not a real newline). Strip it so SMTP auth works.
 const _rawUser = process.env.SMTP_USER || 'sendflow@baahe.org';
 const _rawPass = process.env.SMTP_PASS || '';
 const SMTP_USER = _rawUser.replace(/\\n$/, '').trim();
 const SMTP_PASS = _rawPass.replace(/\\n$/, '').trim();
-const FROM_NAME = process.env.FROM_NAME || 'SendFlow';
-const FROM_EMAIL = (process.env.FROM_EMAIL || SMTP_USER).replace(/\\n$/, '').trim();
-
-// Don's catch-all inbox for tests / verifications. All SendFlow email flows
-// MUST land here first; production recipients only after manual sign-off.
-export const APPROVAL_INBOX = 'Tedymiles7@gmail.com';
 
 let cachedTransporter: nodemailer.Transporter | null = null;
 
@@ -48,6 +53,14 @@ function getTransporter(): nodemailer.Transporter {
   });
   return cachedTransporter;
 }
+
+// ── Shared config ────────────────────────────────────────────────────────────
+const FROM_NAME = process.env.FROM_NAME || 'SendFlow';
+const FROM_EMAIL = (process.env.FROM_EMAIL || 'sendflow@baahe.org').replace(/\\n$/, '').trim();
+
+// Don's catch-all inbox for tests / verifications. All SendFlow email flows
+// MUST land here first; production recipients only after manual sign-off.
+export const APPROVAL_INBOX = 'Tedymiles7@gmail.com';
 
 export interface SendMailOptions {
   to: string | string[];
@@ -82,6 +95,29 @@ export async function sendMail(opts: SendMailOptions): Promise<SendMailResult> {
     return { ok: false, error: 'Either text or html is required', deliveredTo: to };
   }
 
+  // ── Production: Resend API ────────────────────────────────────────────────
+  if (resend) {
+    try {
+      const recipients = Array.isArray(to) ? to : [to];
+      const { data, error } = await resend.emails.send({
+        from: `${FROM_NAME} <${FROM_EMAIL}>`,
+        to: recipients,
+        subject,
+        text: opts.text,
+        html: opts.html,
+        replyTo: opts.replyTo,
+      });
+      if (error) {
+        return { ok: false, error: error.message, deliveredTo: to };
+      }
+      return { ok: true, messageId: data?.id, deliveredTo: to };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return { ok: false, error: msg, deliveredTo: to };
+    }
+  }
+
+  // ── Local dev fallback: nodemailer ──────────────────────────────────────
   try {
     const info = await getTransporter().sendMail({
       from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
@@ -99,10 +135,15 @@ export async function sendMail(opts: SendMailOptions): Promise<SendMailResult> {
 }
 
 /**
- * Verify the SMTP connection. Use in /api/health or before sending the first
- * campaign in a session. Returns ok=true on successful auth + connect.
+ * Verify SMTP connection (nodemailer fallback only).
+ * For Resend, the connection is implicit in the API call.
  */
 export async function verifySmtp(): Promise<{ ok: boolean; error?: string }> {
+  if (resend) {
+    // Resend doesn't have a ping — a zero-recipient send is the cheapest check.
+    // We just return ok=true and let the first real send catch auth errors.
+    return { ok: true };
+  }
   try {
     await getTransporter().verify();
     return { ok: true };
