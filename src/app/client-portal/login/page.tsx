@@ -281,6 +281,15 @@ function ClientLoginForm() {
                 />
               </div>
 
+              <div className="flex justify-end">
+                <a
+                  href="/forgot-password"
+                  className="text-xs text-amber hover:underline"
+                >
+                  Forgot password?
+                </a>
+              </div>
+
               <button
                 type="submit"
                 disabled={loading}
