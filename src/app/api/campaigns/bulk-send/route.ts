@@ -4,7 +4,7 @@ import { createHash } from 'crypto';
 import { getSession } from '@/lib/auth';
 import { requirePlan } from '@/lib/plans';
 
-const DAEMON_URL = process.env.WACLI_DAEMON_URL || 'http://127.0.0.1:4555';
+const DAEMON_URL = process.env.WACLI_DAEMON_URL || 'http://84.8.221.131/wacli';
 
 // KEY_CACHE with TTL — entries expire after 5 minutes to prevent unbounded growth
 const KEY_CACHE = new Map<string, { userId: string; expiresAt: number }>();
