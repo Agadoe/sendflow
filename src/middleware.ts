@@ -9,6 +9,7 @@ const PUBLIC_PATHS = [
   '/register',
   '/api/auth/login',
   '/api/auth/register',
+  '/api/auth/verify',
   '/api/auth/magic-link',
   '/api/waitlist',
   '/client-portal/login',

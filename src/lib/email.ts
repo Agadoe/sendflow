@@ -109,13 +109,14 @@ export async function sendMail(opts: SendMailOptions): Promise<SendMailResult> {
         : { to: recipients, from: `${FROM_NAME} <${FROM_EMAIL}>`, subject, replyTo: opts.replyTo, text: opts.text! };
 
       const { data, error } = await resend.emails.send(emailPayload);
-      if (error) {
-        return { ok: false, error: error.message, deliveredTo: to };
+      if (!error) {
+        return { ok: true, messageId: data?.id, deliveredTo: to };
       }
-      return { ok: true, messageId: data?.id, deliveredTo: to };
+      // Resend failed — fall through to nodemailer (e.g. domain not verified yet)
+      console.warn(`[email] Resend failed (${error.message}), trying nodemailer fallback`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      return { ok: false, error: msg, deliveredTo: to };
+      console.warn(`[email] Resend exception: ${msg}, trying nodemailer fallback`);
     }
   }
 
