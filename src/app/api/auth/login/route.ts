@@ -1,12 +1,12 @@
+import { JWT_SECRET } from '@/lib/jwt';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 import { SignJWT } from 'jose';
+import { buildAuthCookie } from '@/lib/cookie';
 import { checkRateLimit, clientKey } from '@/lib/rate-limit';
+import { loginSchema } from '@/lib/validation';
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET || 'development-secret'
-);
 
 // 5 attempts per minute per IP — slows credential-stuffing without
 // inconveniencing legitimate users who mistype their password.
@@ -28,10 +28,13 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { email, password } = await req.json();
-    if (!email || !password) {
-      return NextResponse.json({ error: 'Email and password required' }, { status: 400 });
+    const body = await req.json();
+    const parsed = loginSchema.safeParse(body);
+    if (!parsed.success) {
+      const message = parsed.error.errors.map(e => e.message).join('. ');
+      return NextResponse.json({ error: message }, { status: 400 });
     }
+    const { email, password } = parsed.data;
 
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user || !user.passwordHash) {
@@ -57,8 +60,7 @@ export async function POST(req: Request) {
       .setExpirationTime('7d')
       .sign(JWT_SECRET);
 
-    const cookie = `sf_token=${token}; HttpOnly; Path=/; Max-Age=${7 * 24 * 60 * 60}; SameSite=Lax`;
-    return NextResponse.json(
+    const cookie = buildAuthCookie(token, 7 * 24 * 60 * 60);    return NextResponse.json(
       { user: { id: user.id, email: user.email, name: user.name, plan: user.plan, role: user.role } },
       { headers: { 'Set-Cookie': cookie } }
     );

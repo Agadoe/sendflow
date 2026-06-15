@@ -1,13 +1,10 @@
+import { JWT_SECRET } from '@/lib/jwt';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { jwtVerify } from 'jose';
 import { getPlan, initializeTransaction } from '@/lib/paystack';
 import { checkRateLimit, clientKey } from '@/lib/rate-limit';
 
-// Auth: read JWT_SECRET first, fall back to NEXTAUTH_SECRET || 'development-secret'
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET || 'development-secret'
-);
 
 async function getUserIdFromRequest(req: NextRequest): Promise<string | null> {
   const token = req.cookies.get('sf_token')?.value;

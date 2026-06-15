@@ -1,3 +1,4 @@
+import { JWT_SECRET } from '@/lib/jwt';
 import { cookies } from 'next/headers';
 import { jwtVerify } from 'jose';
 
@@ -9,9 +10,6 @@ import { jwtVerify } from 'jose';
 // page kept redirecting to itself). The middleware already does the right thing
 // (PUBLIC_PATHS includes /client-portal/login), so this layout should not.
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET || 'development-secret'
-);
 
 export default async function ClientPortalLayout({
   children,

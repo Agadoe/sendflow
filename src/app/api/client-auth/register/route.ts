@@ -3,6 +3,7 @@ import { randomBytes } from 'crypto';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { sendMail } from '@/lib/email';
+import { clientRegisterSchema } from '@/lib/validation';
 
 const LIMIT = { max: 3, windowSec: 600 }; // 3 signups / 10 min / IP
 
@@ -20,15 +21,13 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { name, email, password, phone } = await req.json();
-
-    if (!name || !email || !password) {
-      return NextResponse.json({ error: 'Name, email, and password are required' }, { status: 400 });
+    const body = await req.json();
+    const parsed = clientRegisterSchema.safeParse(body);
+    if (!parsed.success) {
+      const message = parsed.error.errors.map(e => e.message).join('. ');
+      return NextResponse.json({ error: message }, { status: 400 });
     }
-
-    if (password.length < 8) {
-      return NextResponse.json({ error: 'Password must be at least 8 characters' }, { status: 400 });
-    }
+    const { name, email, password, phone } = parsed.data;
 
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) {

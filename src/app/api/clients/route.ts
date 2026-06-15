@@ -1,13 +1,12 @@
+import { JWT_SECRET } from '@/lib/jwt';
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 import { jwtVerify } from 'jose';
 import bcrypt from 'bcryptjs';
-import { SignJWT } from 'jose';
+import { sendMail } from '@/lib/email';
+import { createClientSchema } from '@/lib/validation';
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET || 'development-secret'
-);
 
 function generateTempPassword(): string {
   const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
@@ -79,10 +78,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Admin only' }, { status: 403 });
   }
 
-  const { name, email, phone, company } = await req.json();
-  if (!name || !email) {
-    return NextResponse.json({ error: 'Name and email are required' }, { status: 400 });
+  const body = await req.json();
+  const parsed = createClientSchema.safeParse(body);
+  if (!parsed.success) {
+    const message = parsed.error.errors.map(e => e.message).join('. ');
+    return NextResponse.json({ error: message }, { status: 400 });
   }
+  const { name, email, phone } = parsed.data;
 
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
@@ -111,12 +113,54 @@ export async function POST(req: Request) {
     },
   });
 
-  // Return temp password so admin can share it with client
-  return NextResponse.json({
-    client,
-    tempPassword,
-    shareMessage: `Send this to your client:\n\nEmail: ${email}\nTemporary Password: ${tempPassword}\n\nLogin at: https://sendflow-two.vercel.app/client-portal\n\nThey should change their password after first login.`,
+  // Email temp password directly to the client (never return in API response)
+  const loginUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://sendflow-two.vercel.app';
+  const mailResult = await sendMail({
+    to: email,
+    subject: 'Your SendFlow client portal account',
+    text: [
+      `Hi ${name},`,
+      ``,
+      `An admin has created a SendFlow account for you.`,
+      ``,
+      `Login: ${loginUrl}/client-portal`,
+      `Email: ${email}`,
+      `Temporary Password: ${tempPassword}`,
+      ``,
+      `Please change your password after your first login.`,
+    ].join('\n'),
+    html: `
+      <p>Hi ${name},</p>
+      <p>An admin has created a SendFlow account for you.</p>
+      <p style="margin:16px 0">
+        <strong>Login:</strong> <a href="${loginUrl}/client-portal">${loginUrl}/client-portal</a><br/>
+        <strong>Email:</strong> ${email}<br/>
+        <strong>Temporary Password:</strong> <code>${tempPassword}</code>
+      </p>
+      <p>Please change your password after your first login.</p>
+    `,
+    testMode: false,
   });
+
+  if (!mailResult.ok) {
+    console.error('[clients] failed to email temp password:', mailResult.error, { to: email });
+    // Still return 201 — account was created, but warn admin
+    return NextResponse.json(
+      {
+        client,
+        warning: 'Account created, but the temporary password could not be emailed. Please generate a password reset for this client.',
+      },
+      { status: 201 }
+    );
+  }
+
+  return NextResponse.json(
+    {
+      client,
+      message: 'Account created and login credentials emailed to client.',
+    },
+    { status: 201 }
+  );
 }
 
 // DELETE — delete a client account (admin only)

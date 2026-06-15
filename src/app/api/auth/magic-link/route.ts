@@ -1,10 +1,8 @@
+import { JWT_SECRET } from '@/lib/jwt';
 import { NextResponse } from 'next/server';
 import { SignJWT } from 'jose';
 import { sendMail, APPROVAL_INBOX } from '@/lib/email';
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET || 'development-secret'
-);
 
 // Allow ?ref=leadops&utm_source=... to ride through the magic-link click.
 // Captured server-side so the verify route can persist attribution.

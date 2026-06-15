@@ -1,18 +1,37 @@
+import { JWT_SECRET } from '@/lib/jwt';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 import { SignJWT } from 'jose';
+import { buildAuthCookie } from '@/lib/cookie';
+import { checkRateLimit, clientKey } from '@/lib/rate-limit';
+import { loginSchema } from '@/lib/validation';
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET || 'development-secret'
-);
+const LIMIT = { max: 5, windowSec: 60 };
 
 export async function POST(req: Request) {
+  const limit = checkRateLimit(clientKey(req, 'client-auth:login'), LIMIT);
+  if (!limit.ok) {
+    return NextResponse.json(
+      { error: 'Too many login attempts. Try again in a minute.' },
+      {
+        status: 429,
+        headers: {
+          'Retry-After': String(limit.resetInSec),
+          'X-RateLimit-Remaining': '0',
+        },
+      }
+    );
+  }
+
   try {
-    const { email, password } = await req.json();
-    if (!email || !password) {
-      return NextResponse.json({ error: 'Email and password required' }, { status: 400 });
+    const body = await req.json();
+    const parsed = loginSchema.safeParse(body);
+    if (!parsed.success) {
+      const message = parsed.error.errors.map(e => e.message).join('. ');
+      return NextResponse.json({ error: message }, { status: 400 });
     }
+    const { email, password } = parsed.data;
 
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user || !user.passwordHash) {
@@ -52,8 +71,7 @@ export async function POST(req: Request) {
       .setExpirationTime('7d')
       .sign(JWT_SECRET);
 
-    const cookie = `sf_token=${token}; HttpOnly; Path=/; Max-Age=${7 * 24 * 60 * 60}; SameSite=Lax`;
-    return NextResponse.json(
+    const cookie = buildAuthCookie(token, 7 * 24 * 60 * 60);    return NextResponse.json(
       { ok: true, message: 'Login successful' },
       { headers: { 'Set-Cookie': cookie } }
     );

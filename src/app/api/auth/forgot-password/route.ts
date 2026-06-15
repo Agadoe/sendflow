@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { randomBytes } from 'crypto';
 import { prisma } from '@/lib/prisma';
 import { sendMail } from '@/lib/email';
+import { forgotPasswordSchema } from '@/lib/validation';
 
 const LIMIT = { max: 3, windowSec: 600 }; // 3 resets / 10 min / IP
 
@@ -18,10 +19,13 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { email } = await req.json();
-    if (!email || !email.includes('@')) {
-      return NextResponse.json({ error: 'Valid email address required' }, { status: 400 });
+    const body = await req.json();
+    const parsed = forgotPasswordSchema.safeParse(body);
+    if (!parsed.success) {
+      const message = parsed.error.errors.map(e => e.message).join('. ');
+      return NextResponse.json({ error: message }, { status: 400 });
     }
+    const { email } = parsed.data;
 
     const user = await prisma.user.findUnique({ where: { email } });
 

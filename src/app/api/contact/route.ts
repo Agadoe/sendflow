@@ -1,3 +1,4 @@
+import { JWT_SECRET } from '@/lib/jwt';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import nodemailer from 'nodemailer';
@@ -213,9 +214,6 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   try {
     const { jwtVerify } = await import('jose');
-    const JWT_SECRET = new TextEncoder().encode(
-      process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET || 'development-secret'
-    );
     const token = req.cookies.get('sf_token')?.value;
     if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     await jwtVerify(token, JWT_SECRET);
@@ -249,9 +247,6 @@ export async function GET(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   try {
     const { jwtVerify } = await import('jose');
-    const JWT_SECRET = new TextEncoder().encode(
-      process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET || 'development-secret'
-    );
     const token = req.cookies.get('sf_token')?.value;
     if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const { payload } = await jwtVerify(token, JWT_SECRET);
@@ -282,9 +277,6 @@ export async function PATCH(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   try {
     const { jwtVerify } = await import('jose');
-    const JWT_SECRET = new TextEncoder().encode(
-      process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET || 'development-secret'
-    );
     const token = req.cookies.get('sf_token')?.value;
     if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     await jwtVerify(token, JWT_SECRET);

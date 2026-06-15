@@ -1,11 +1,9 @@
+import { JWT_SECRET } from '@/lib/jwt';
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 import { jwtVerify } from 'jose';
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET || 'development-secret'
-);
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
 const GROQ_URL    = 'https://api.groq.com/openai/v1/chat/completions';

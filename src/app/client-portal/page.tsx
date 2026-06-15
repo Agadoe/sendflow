@@ -1,11 +1,9 @@
+import { JWT_SECRET } from '@/lib/jwt';
 import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 import { jwtVerify } from 'jose';
 import Link from 'next/link';
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET || 'development-secret'
-);
 
 function formatDate(date: Date) {
   return new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short' }).format(date);

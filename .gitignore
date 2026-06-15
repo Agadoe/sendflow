@@ -1,19 +1,42 @@
+# Dependencies
 node_modules/
+
+# Next.js build output
 .next/
+.next/trace
+tsconfig.tsbuildinfo
+
+# Environment variables (NEVER commit these)
 .env
 .env.local
 .env.*.local
+.env.deployed
+.env.vercel
+.env.bak
+
+# Local databases
 *.db
 *.db-journal
-.DS_Store
-vercel.json
+
+# WhatsApp session data (contains auth tokens and QR codes)
+.wwebjs_auth/
+.wwebjs_cache/
+
+# Runtime logs
+*.log
+loop.log
+
+# Vercel
 .vercel
-.env*.local
+vercel.json
 
-.env
-.env.bak
-.env.local
+# OS files
+.DS_Store
 
-# Build artifacts (added 2026-06-05)
-.next/trace
-tsconfig.tsbuildinfo
+# Test outputs
+test-results/
+playwright-report/
+
+# Waitlist / user data exports (PII)
+*.csv
+sendflow-waitlist.csv

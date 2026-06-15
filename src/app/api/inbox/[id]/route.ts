@@ -3,14 +3,12 @@
  *
  * Returns the full email (including htmlBody / textBody) and marks it as read.
  */
+import { JWT_SECRET } from '@/lib/jwt';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
 async function getUserFromJwt(req: NextRequest): Promise<string | null> {
   const { jwtVerify } = await import('jose');
-  const JWT_SECRET = new TextEncoder().encode(
-    process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET || 'development-secret'
-  );
   const token = req.cookies.get('sf_token')?.value;
   if (!token) return null;
   try {

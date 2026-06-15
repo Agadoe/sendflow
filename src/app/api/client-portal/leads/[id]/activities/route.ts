@@ -1,11 +1,9 @@
+import { JWT_SECRET } from '@/lib/jwt';
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 import { jwtVerify } from 'jose';
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET || 'development-secret'
-);
 
 async function auth(req: NextRequest) {
   const cookieStore = await cookies();

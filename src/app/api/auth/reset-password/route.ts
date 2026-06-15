@@ -1,20 +1,17 @@
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
+import { resetPasswordSchema } from '@/lib/validation';
 
 export async function POST(req: Request) {
   try {
-    const { token, password } = await req.json();
-
-    if (!token || typeof token !== 'string') {
-      return NextResponse.json({ error: 'Reset token required' }, { status: 400 });
+    const body = await req.json();
+    const parsed = resetPasswordSchema.safeParse(body);
+    if (!parsed.success) {
+      const message = parsed.error.errors.map(e => e.message).join('. ');
+      return NextResponse.json({ error: message }, { status: 400 });
     }
-    if (!password || password.length < 8) {
-      return NextResponse.json(
-        { error: 'Password must be at least 8 characters' },
-        { status: 400 }
-      );
-    }
+    const { token, password } = parsed.data;
 
     // Find the token — it must exist and not be expired.
     // identifier format: forgot:${email}

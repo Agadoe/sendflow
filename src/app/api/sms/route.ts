@@ -1,9 +1,7 @@
+import { JWT_SECRET } from '@/lib/jwt';
 import { NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET || 'development-secret'
-);
 
 async function getUserIdFromCookie(cookieHeader: string | null): Promise<string | null> {
   if (!cookieHeader) return null;

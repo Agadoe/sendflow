@@ -1,10 +1,9 @@
+import { buildAuthCookie } from '@/lib/cookie';
+import { JWT_SECRET } from '@/lib/jwt';
 import { NextResponse } from 'next/server';
 import { jwtVerify, SignJWT } from 'jose';
 import { prisma } from '@/lib/prisma';
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET || 'development-secret'
-);
 
 const ATTRIBUTION_CLAIMS = [
   'ref',
@@ -80,7 +79,7 @@ export async function GET(req: Request) {
       },
       {
         headers: {
-          'Set-Cookie': `sf_token=${sessionToken}; HttpOnly; Path=/; Max-Age=${7 * 24 * 60 * 60}; SameSite=Lax`,
+          'Set-Cookie': buildAuthCookie(sessionToken, 7 * 24 * 60 * 60),
         },
       }
     );

@@ -9,15 +9,13 @@
  * PATCH  /api/inbox      body: { id, read }
  * DELETE /api/inbox?id=… 
  */
+import { JWT_SECRET } from '@/lib/jwt';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { fetchInboundMail } from '@/lib/mail-fetcher';
 
 async function getUserFromJwt(req: NextRequest): Promise<string | null> {
   const { jwtVerify } = await import('jose');
-  const JWT_SECRET = new TextEncoder().encode(
-    process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET || 'development-secret'
-  );
   const token = req.cookies.get('sf_token')?.value;
   if (!token) return null;
   try {

@@ -1,3 +1,4 @@
+import { buildAuthCookie } from '@/lib/cookie';
 import { NextResponse } from 'next/server';
 
 export async function POST() {
@@ -5,7 +6,7 @@ export async function POST() {
     { success: true },
     {
       headers: {
-        'Set-Cookie': 'sf_token=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax',
+        'Set-Cookie': buildAuthCookie('', 0),
       },
     }
   );
