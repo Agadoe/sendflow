@@ -48,7 +48,7 @@ export async function POST() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const res = await fetchDaemon('/disconnect', {
+    const res = await fetchDaemon('/wacli/disconnect', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

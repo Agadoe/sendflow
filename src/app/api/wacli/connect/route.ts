@@ -49,7 +49,7 @@ export async function POST() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const res = await fetchDaemon('/connect', {
+    const res = await fetchDaemon('/wacli/connect', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -84,7 +84,7 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const res = await fetchDaemon('/qr', {
+    const res = await fetchDaemon('/wacli/qr', {
       headers: {
         'X-User-Id': user.id
       }

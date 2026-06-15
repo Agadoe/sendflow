@@ -49,7 +49,7 @@ export async function GET() {
     }
 
     // Fetch status from the multi-tenant daemon
-    const res = await fetchDaemon('/status', {
+    const res = await fetchDaemon('/wacli/status', {
       headers: {
         'X-User-Id': user.id
       }
