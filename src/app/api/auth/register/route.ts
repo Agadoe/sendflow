@@ -116,10 +116,15 @@ export async function POST(req: Request) {
 
     if (!result.ok) {
       console.error('[register] verification email failed:', result.error, { to: email });
-      // Don't expose SMTP errors to client — account was created, they can re-request verify
+      // Account was created — still return 202 so the client can proceed.
+      // The user can re-request verification email from the login screen.
       return NextResponse.json(
-        { error: 'Account created, but verification email failed. Contact support.' },
-        { status: 502 }
+        {
+          message: 'Account created. Check your email to verify your address.',
+          deliveredTo: result.deliveredTo,
+          emailWarning: 'Verification email could not be sent. Use "Resend" on the login screen.',
+        },
+        { status: 202 }
       );
     }
 
