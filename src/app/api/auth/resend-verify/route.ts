@@ -86,23 +86,23 @@ export async function POST(req: Request) {
           This link expires in <strong>1 hour</strong>. If you didn't request this, ignore the email.
         </p>
       `,
-      testMode: true,
+      testMode: false, // real address provided, attempt real delivery
     });
 
+    // Always include the token in test mode — token is already in DB, email is secondary.
+    const testModePayload = TEST_MODE ? { token, verifyUrl } : {};
+
     if (!result.ok) {
-      console.error('[resend-verify] SMTP failed:', result.error, { to: email });
+      console.error('[resend-verify] email failed:', result.error, { to: email });
+      // Email failed but token is valid — still tell the test via testModePayload.
       return NextResponse.json(
-        { message: 'If that email is registered, a verification link has been sent.' },
+        { message: 'If that email is registered, a verification link has been sent.', ...testModePayload },
         { status: 200 }
       );
     }
 
     return NextResponse.json(
-      {
-        message: 'Verification email resent. Check your inbox.',
-        // In test mode, include the token directly so e2e tests can verify without email.
-        ...(TEST_MODE ? { token, verifyUrl } : {}),
-      },
+      { message: 'Verification email resent. Check your inbox.', ...testModePayload },
       { status: 200 }
     );
   } catch (err) {
