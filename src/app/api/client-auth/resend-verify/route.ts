@@ -82,7 +82,7 @@ export async function POST(req: Request) {
           This link expires in <strong>1 hour</strong>. If you didn't request this, ignore the email.
         </p>
       `,
-      testMode: true,
+      testMode: process.env.EMAIL_TEST_MODE === 'true', // set EMAIL_TEST_MODE=true in dev only
     });
 
     if (!result.ok) {

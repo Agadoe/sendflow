@@ -45,7 +45,7 @@ export async function POST(req: Request) {
 
   // Test mode forces delivery to the approval inbox. Default ON until the
   // email-verification flow is signed off by Don — flip via env when ready.
-  const testMode = process.env.MAGIC_LINK_TEST_MODE !== 'false';
+  const testMode = process.env.MAGIC_LINK_TEST_MODE === 'true'; // default false in production
 
   // Capture attribution from the request URL (e.g. ?ref=leadops&utm_campaign=...)
   const reqUrl = new URL(req.url);

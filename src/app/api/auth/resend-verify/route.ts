@@ -7,7 +7,7 @@ import { sendMail } from '@/lib/email';
 const LIMIT = { max: 3, windowSec: 600 };
 
 // Test mode: when enabled, return the raw token in the response so e2e tests
-// can verify without needing email access. Flip with MAGIC_LINK_TEST_MODE=false to disable.
+// Resend verification email. Flip MAGIC_LINK_TEST_MODE=true in dev to route to approval inbox.
 const TEST_MODE = process.env.MAGIC_LINK_TEST_MODE !== 'false';
 
 export async function POST(req: Request) {
