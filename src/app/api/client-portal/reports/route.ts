@@ -1,4 +1,4 @@
-import { JWT_SECRET } from '@/lib/jwt';
+import { getJWTSecret } from '@/lib/jwt';
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
@@ -14,7 +14,7 @@ export async function GET() {
   }
 
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET);
+    const { payload } = await jwtVerify(token, getJWTSecret());
     const userId = payload.sub as string;
 
     if (payload.role !== 'CLIENT') {

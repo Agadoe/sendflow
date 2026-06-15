@@ -2,8 +2,19 @@ import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { resetPasswordSchema } from '@/lib/validation';
+import { checkRateLimit, clientKey } from '@/lib/rate-limit';
+
+const LIMIT = { max: 5, windowSec: 60 };
 
 export async function POST(req: Request) {
+  const limit = checkRateLimit(clientKey(req, 'auth:reset-password'), LIMIT);
+  if (!limit.ok) {
+    return NextResponse.json(
+      { error: 'Too many attempts. Try again in a minute.' },
+      { status: 429, headers: { 'Retry-After': String(limit.resetInSec) } }
+    );
+  }
+
   try {
     const body = await req.json();
     const parsed = resetPasswordSchema.safeParse(body);

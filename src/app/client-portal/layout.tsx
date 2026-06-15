@@ -1,4 +1,4 @@
-import { JWT_SECRET } from '@/lib/jwt';
+import { getJWTSecret } from '@/lib/jwt';
 import { cookies } from 'next/headers';
 import { jwtVerify } from 'jose';
 
@@ -24,7 +24,7 @@ export default async function ClientPortalLayout({
   let user: { sub?: string; email?: string; name?: string; role?: string } = {};
   if (token) {
     try {
-      const { payload } = await jwtVerify(token, JWT_SECRET);
+      const { payload } = await jwtVerify(token, getJWTSecret());
       user = payload as { sub?: string; email?: string; name?: string; role?: string };
     } catch {
       // Invalid token: middleware will have already redirected. Just ignore.

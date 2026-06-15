@@ -1,16 +1,18 @@
-import { JWT_SECRET } from '@/lib/jwt';
+import { getJWTSecret } from '@/lib/jwt';
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 import { jwtVerify } from 'jose';
 import bcrypt from 'bcryptjs';
 import { sendMail } from '@/lib/email';
-import { createClientSchema } from '@/lib/validation';
+import { createClientSchema, deleteClientSchema } from '@/lib/validation';
 
+
+import { randomInt } from 'crypto';
 
 function generateTempPassword(): string {
   const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
-  return Array.from({ length: 10 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+  return Array.from({ length: 10 }, () => chars[randomInt(chars.length)]).join('');
 }
 
 // GET — list all client accounts (admin only)
@@ -24,7 +26,7 @@ export async function GET() {
 
   let payload: Record<string, unknown>;
   try {
-    const result = await jwtVerify(token, JWT_SECRET);
+    const result = await jwtVerify(token, getJWTSecret());
     payload = result.payload;
   } catch {
     return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
@@ -68,7 +70,7 @@ export async function POST(req: Request) {
 
   let payload: Record<string, unknown>;
   try {
-    const result = await jwtVerify(token, JWT_SECRET);
+    const result = await jwtVerify(token, getJWTSecret());
     payload = result.payload;
   } catch {
     return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
@@ -174,7 +176,7 @@ export async function DELETE(req: Request) {
 
   let payload: Record<string, unknown>;
   try {
-    const result = await jwtVerify(token, JWT_SECRET);
+    const result = await jwtVerify(token, getJWTSecret());
     payload = result.payload;
   } catch {
     return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
@@ -184,10 +186,13 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ error: 'Admin only' }, { status: 403 });
   }
 
-  const { id } = await req.json();
-  if (!id) {
-    return NextResponse.json({ error: 'Client ID required' }, { status: 400 });
+  const body = await req.json();
+  const parsed = deleteClientSchema.safeParse(body);
+  if (!parsed.success) {
+    const message = parsed.error.errors.map(e => e.message).join('. ');
+    return NextResponse.json({ error: message }, { status: 400 });
   }
+  const { id } = parsed.data;
 
   await prisma.user.deleteMany({ where: { id, role: 'CLIENT' } });
 

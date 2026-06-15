@@ -1,4 +1,4 @@
-import { JWT_SECRET } from '@/lib/jwt';
+import { getJWTSecret } from '@/lib/jwt';
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
@@ -10,7 +10,7 @@ async function auth(req: NextRequest) {
   const token = cookieStore.get('sf_token')?.value;
   if (!token) return null;
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET);
+    const { payload } = await jwtVerify(token, getJWTSecret());
     if (payload.role !== 'CLIENT') return null;
     return payload.sub as string;
   } catch {

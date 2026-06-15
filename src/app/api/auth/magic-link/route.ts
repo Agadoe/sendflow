@@ -1,7 +1,9 @@
-import { JWT_SECRET } from '@/lib/jwt';
+import { getJWTSecret } from '@/lib/jwt';
 import { NextResponse } from 'next/server';
 import { SignJWT } from 'jose';
 import { sendMail, APPROVAL_INBOX } from '@/lib/email';
+import { checkRateLimit, clientKey } from '@/lib/rate-limit';
+import { forgotPasswordSchema } from '@/lib/validation';
 
 
 // Allow ?ref=leadops&utm_source=... to ride through the magic-link click.
@@ -16,7 +18,17 @@ function captureAttribution(url: URL): Record<string, string> {
   return out;
 }
 
+const LIMIT = { max: 3, windowSec: 60 };
+
 export async function POST(req: Request) {
+  const limit = checkRateLimit(clientKey(req, 'auth:magic-link'), LIMIT);
+  if (!limit.ok) {
+    return NextResponse.json(
+      { error: 'Too many attempts. Try again in a minute.' },
+      { status: 429, headers: { 'Retry-After': String(limit.resetInSec) } }
+    );
+  }
+
   let body: { email?: string };
   try {
     body = await req.json();
@@ -24,10 +36,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const email = (body.email || '').trim().toLowerCase();
-  if (!email || !email.includes('@')) {
-    return NextResponse.json({ error: 'Valid email required' }, { status: 400 });
+  const parsed = forgotPasswordSchema.safeParse(body);
+  if (!parsed.success) {
+    const message = parsed.error.errors.map(e => e.message).join('. ');
+    return NextResponse.json({ error: message }, { status: 400 });
   }
+  const email = parsed.data.email.trim().toLowerCase();
 
   // Test mode forces delivery to the approval inbox. Default ON until the
   // email-verification flow is signed off by Don — flip via env when ready.
@@ -42,7 +56,7 @@ export async function POST(req: Request) {
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime('15m')
-    .sign(JWT_SECRET);
+    .sign(getJWTSecret());
 
   const base = process.env.NEXT_PUBLIC_APP_URL || `${reqUrl.protocol}//${reqUrl.host}`;
   const verifyUrl = `${base}/api/auth/verify?token=${encodeURIComponent(token)}`;

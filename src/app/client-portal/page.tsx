@@ -1,4 +1,4 @@
-import { JWT_SECRET } from '@/lib/jwt';
+import { getJWTSecret } from '@/lib/jwt';
 import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 import { jwtVerify } from 'jose';
@@ -30,7 +30,7 @@ export default async function ClientDashboardPage() {
 
   if (token) {
     try {
-      const { payload } = await jwtVerify(token, JWT_SECRET);
+      const { payload } = await jwtVerify(token, getJWTSecret());
       userId = payload.sub as string;
     } catch {
       userId = '';

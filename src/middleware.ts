@@ -1,4 +1,4 @@
-import { JWT_SECRET } from '@/lib/jwt';
+import { getJWTSecret } from '@/lib/jwt';
 import { NextRequest, NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
 
@@ -38,7 +38,7 @@ export async function middleware(req: NextRequest) {
     }
 
     try {
-      const { payload } = await jwtVerify(token, JWT_SECRET);
+      const { payload } = await jwtVerify(token, getJWTSecret());
       if (payload.role !== 'CLIENT') {
         return NextResponse.redirect(new URL('/client-portal/login', req.url));
       }
@@ -64,7 +64,12 @@ export async function middleware(req: NextRequest) {
     }
 
     try {
-      await jwtVerify(token, JWT_SECRET);
+      const { payload } = await jwtVerify(token, getJWTSecret());
+      if (payload.role === 'CLIENT') {
+        // CLIENTs should not access the admin dashboard
+        const loginUrl = new URL('/client-portal', req.url);
+        return NextResponse.redirect(loginUrl);
+      }
       return NextResponse.next();
     } catch {
       const loginUrl = new URL('/login', req.url);

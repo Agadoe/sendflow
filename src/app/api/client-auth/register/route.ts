@@ -94,7 +94,7 @@ export async function POST(req: Request) {
           SendFlow account, you can safely ignore this email.
         </p>
       `,
-      testMode: true, // test mode ON by default — flip MAGIC_LINK_TEST_MODE=false to disable
+      testMode: process.env.EMAIL_TEST_MODE === 'true', // set EMAIL_TEST_MODE=true in dev only
     });
 
     if (!result.ok) {

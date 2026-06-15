@@ -1,4 +1,4 @@
-import { JWT_SECRET } from '@/lib/jwt';
+import { getJWTSecret } from '@/lib/jwt';
 import { NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
 
@@ -8,7 +8,7 @@ async function getUserIdFromCookie(cookieHeader: string | null): Promise<string 
   const match = cookieHeader.match(/sf_token=([^;]+)/);
   if (!match) return null;
   try {
-    const { payload } = await jwtVerify(match[1], JWT_SECRET);
+    const { payload } = await jwtVerify(match[1], getJWTSecret());
     return payload.sub as string;
   } catch {
     return null;

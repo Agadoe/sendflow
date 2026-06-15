@@ -1,4 +1,4 @@
-import { JWT_SECRET } from '@/lib/jwt';
+import { getJWTSecret } from '@/lib/jwt';
 import { jwtVerify, SignJWT } from 'jose';
 import { NextRequest } from 'next/server';
 import { cookies } from 'next/headers';
@@ -42,7 +42,7 @@ export async function getSession(req: NextRequest): Promise<SessionUser | null> 
   if (!token) return null;
 
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET);
+    const { payload } = await jwtVerify(token, getJWTSecret());
     const userId = payload.sub as string;
 
     const user = await prisma.user.findUnique({
@@ -105,7 +105,7 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
   if (!token) return null;
 
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET);
+    const { payload } = await jwtVerify(token, getJWTSecret());
     const userId = payload.sub as string;
     if (!userId) return null;
 

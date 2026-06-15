@@ -1,8 +1,9 @@
 import { buildAuthCookie } from '@/lib/cookie';
-import { JWT_SECRET } from '@/lib/jwt';
+import { getJWTSecret } from '@/lib/jwt';
 import { NextResponse } from 'next/server';
 import { jwtVerify, SignJWT } from 'jose';
 import { prisma } from '@/lib/prisma';
+import { checkRateLimit, clientKey } from '@/lib/rate-limit';
 
 
 const ATTRIBUTION_CLAIMS = [
@@ -13,13 +14,23 @@ const ATTRIBUTION_CLAIMS = [
   'utm_content',
 ] as const;
 
+const LIMIT = { max: 10, windowSec: 60 };
+
 export async function GET(req: Request) {
+  const limit = checkRateLimit(clientKey(req, 'auth:verify'), LIMIT);
+  if (!limit.ok) {
+    return NextResponse.json(
+      { error: 'Too many attempts. Try again in a minute.' },
+      { status: 429, headers: { 'Retry-After': String(limit.resetInSec) } }
+    );
+  }
+
   const { searchParams } = new URL(req.url);
   const token = searchParams.get('token');
   if (!token) return NextResponse.json({ error: 'Token required' }, { status: 400 });
 
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET);
+    const { payload } = await jwtVerify(token, getJWTSecret());
     const email = payload.sub as string;
     if (!email) return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
 
@@ -64,7 +75,7 @@ export async function GET(req: Request) {
       .setProtectedHeader({ alg: 'HS256' })
       .setIssuedAt()
       .setExpirationTime('7d')
-      .sign(JWT_SECRET);
+      .sign(getJWTSecret());
 
     return NextResponse.json(
       {

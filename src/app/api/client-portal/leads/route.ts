@@ -1,4 +1,4 @@
-import { JWT_SECRET } from '@/lib/jwt';
+import { getJWTSecret } from '@/lib/jwt';
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
   if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET);
+    const { payload } = await jwtVerify(token, getJWTSecret());
     if (payload.role !== 'CLIENT') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     const userId = payload.sub as string;
 
@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
   if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET);
+    const { payload } = await jwtVerify(token, getJWTSecret());
     if (payload.role !== 'CLIENT') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     const userId = payload.sub as string;
 

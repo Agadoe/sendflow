@@ -1,11 +1,22 @@
 import { buildAuthCookie } from '@/lib/cookie';
-import { JWT_SECRET } from '@/lib/jwt';
+import { getJWTSecret } from '@/lib/jwt';
 import { NextResponse } from 'next/server';
 import { SignJWT } from 'jose';
 import { prisma } from '@/lib/prisma';
+import { checkRateLimit, clientKey } from '@/lib/rate-limit';
 
+
+const LIMIT = { max: 10, windowSec: 60 };
 
 export async function GET(req: Request) {
+  const limit = checkRateLimit(clientKey(req, 'client-auth:verify-email'), LIMIT);
+  if (!limit.ok) {
+    return NextResponse.json(
+      { error: 'Too many attempts. Try again in a minute.' },
+      { status: 429, headers: { 'Retry-After': String(limit.resetInSec) } }
+    );
+  }
+
   const { searchParams } = new URL(req.url);
   const token = searchParams.get('token');
 
@@ -45,7 +56,7 @@ export async function GET(req: Request) {
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime('7d')
-    .sign(JWT_SECRET);
+    .sign(getJWTSecret());
 
   const base = process.env.NEXT_PUBLIC_APP_URL || new URL(req.url).origin;
 

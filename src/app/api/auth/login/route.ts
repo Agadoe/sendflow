@@ -1,4 +1,4 @@
-import { JWT_SECRET } from '@/lib/jwt';
+import { getJWTSecret } from '@/lib/jwt';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
@@ -58,7 +58,7 @@ export async function POST(req: Request) {
       .setProtectedHeader({ alg: 'HS256' })
       .setIssuedAt()
       .setExpirationTime('7d')
-      .sign(JWT_SECRET);
+      .sign(getJWTSecret());
 
     const cookie = buildAuthCookie(token, 7 * 24 * 60 * 60);    return NextResponse.json(
       { user: { id: user.id, email: user.email, name: user.name, plan: user.plan, role: user.role } },

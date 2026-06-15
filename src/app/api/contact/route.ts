@@ -1,7 +1,9 @@
-import { JWT_SECRET } from '@/lib/jwt';
+import { getJWTSecret } from '@/lib/jwt';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import nodemailer from 'nodemailer';
+import { checkRateLimit, clientKey } from '@/lib/rate-limit';
+import { contactFormSchema } from '@/lib/validation';
 
 // Notification target — the same address that receives KGC leads.
 // Centralizes inbound inquiries so Don doesn't have to check multiple inboxes.
@@ -49,22 +51,25 @@ function esc(s: string): string {
     .replace(/'/g, '&#39;');
 }
 
-export async function POST(req: NextRequest) {
-  try {
-    const { name, email, phone, subject, message } = await req.json();
+const POST_LIMIT = { max: 3, windowSec: 60 };
 
-    if (!name || !email || !message) {
-      return NextResponse.json(
-        { error: 'Name, email, and message are required' },
-        { status: 400 }
-      );
+export async function POST(req: NextRequest) {
+  const limit = checkRateLimit(clientKey(req as unknown as Request, 'contact:post'), POST_LIMIT);
+  if (!limit.ok) {
+    return NextResponse.json(
+      { error: 'Too many messages. Try again in a minute.' },
+      { status: 429, headers: { 'Retry-After': String(limit.resetInSec) } }
+    );
+  }
+
+  try {
+    const body = await req.json();
+    const parsed = contactFormSchema.safeParse(body);
+    if (!parsed.success) {
+      const message = parsed.error.errors.map(e => e.message).join('. ');
+      return NextResponse.json({ error: message }, { status: 400 });
     }
-    if (!isValidEmail(email)) {
-      return NextResponse.json({ error: 'Please use a valid email address' }, { status: 400 });
-    }
-    if (String(message).length > 5000) {
-      return NextResponse.json({ error: 'Message too long (max 5000 chars)' }, { status: 400 });
-    }
+    const { name, email, phone, subject, message } = parsed.data;
 
     // 1) Persist the message first — never lose a lead even if SMTP fails.
     const contact = await prisma.contactMessage.create({
@@ -216,7 +221,7 @@ export async function GET(req: NextRequest) {
     const { jwtVerify } = await import('jose');
     const token = req.cookies.get('sf_token')?.value;
     if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    await jwtVerify(token, JWT_SECRET);
+    await jwtVerify(token, getJWTSecret());
 
     const url = new URL(req.url);
     const limit = Math.min(parseInt(url.searchParams.get('limit') || '50', 10) || 50, 200);
@@ -249,7 +254,7 @@ export async function PATCH(req: NextRequest) {
     const { jwtVerify } = await import('jose');
     const token = req.cookies.get('sf_token')?.value;
     if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    const { payload } = await jwtVerify(token, JWT_SECRET);
+    const { payload } = await jwtVerify(token, getJWTSecret());
     const userId = (payload.sub as string) || null;
 
     const { id, read } = await req.json();
@@ -279,7 +284,7 @@ export async function DELETE(req: NextRequest) {
     const { jwtVerify } = await import('jose');
     const token = req.cookies.get('sf_token')?.value;
     if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    await jwtVerify(token, JWT_SECRET);
+    await jwtVerify(token, getJWTSecret());
 
     const url = new URL(req.url);
     const id = url.searchParams.get('id');

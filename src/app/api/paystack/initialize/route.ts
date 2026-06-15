@@ -1,4 +1,4 @@
-import { JWT_SECRET } from '@/lib/jwt';
+import { getJWTSecret } from '@/lib/jwt';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { jwtVerify } from 'jose';
@@ -10,7 +10,7 @@ async function getUserIdFromRequest(req: NextRequest): Promise<string | null> {
   const token = req.cookies.get('sf_token')?.value;
   if (!token) return null;
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET);
+    const { payload } = await jwtVerify(token, getJWTSecret());
     return (payload.sub as string) || null;
   } catch {
     return null;

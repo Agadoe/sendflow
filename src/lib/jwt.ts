@@ -4,6 +4,11 @@
  * Throws at **runtime** if JWT_SECRET or NEXTAUTH_SECRET is missing.
  * This allows `next build` to complete without env vars, while ensuring
  * the app refuses to serve requests in production without a real secret.
+ *
+ * Usage:
+ *   import { getJWTSecret } from '@/lib/jwt';
+ *   await jwtVerify(token, getJWTSecret());
+ *   await new SignJWT(payload).sign(getJWTSecret());
  */
 
 let _secret: Uint8Array | null = null;
@@ -22,10 +27,5 @@ export function getJWTSecret(): Uint8Array {
   return _secret;
 }
 
-// Backwards-compatible export for files that destructure { JWT_SECRET }
-export const JWT_SECRET = new Proxy({} as Uint8Array, {
-  get(_target, prop) {
-    const secret = getJWTSecret();
-    return (secret as any)[prop];
-  },
-});
+// Backwards-compatible re-export for files that destructure { getJWTSecret }
+export { getJWTSecret as JWT_SECRET };

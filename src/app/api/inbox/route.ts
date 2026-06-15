@@ -9,26 +9,28 @@
  * PATCH  /api/inbox      body: { id, read }
  * DELETE /api/inbox?id=… 
  */
-import { JWT_SECRET } from '@/lib/jwt';
+import { getJWTSecret } from '@/lib/jwt';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { fetchInboundMail } from '@/lib/mail-fetcher';
 
-async function getUserFromJwt(req: NextRequest): Promise<string | null> {
+async function getUserFromJwt(req: NextRequest): Promise<{ userId: string; role: string } | null> {
   const { jwtVerify } = await import('jose');
   const token = req.cookies.get('sf_token')?.value;
   if (!token) return null;
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET);
-    return (payload.sub as string) || null;
+    const { payload } = await jwtVerify(token, getJWTSecret());
+    return { userId: (payload.sub as string) || '', role: (payload.role as string) || '' };
   } catch {
     return null;
   }
 }
 
 export async function GET(req: NextRequest) {
-  const userId = await getUserFromJwt(req);
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const session = await getUserFromJwt(req);
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (session.role === 'CLIENT') return NextResponse.json({ error: 'Admin only' }, { status: 403 });
+  const userId = session.userId;
 
   const url = new URL(req.url);
   const limit = Math.min(parseInt(url.searchParams.get('limit') || '50', 10) || 50, 200);
@@ -93,8 +95,10 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const userId = await getUserFromJwt(req);
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const session = await getUserFromJwt(req);
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (session.role === 'CLIENT') return NextResponse.json({ error: 'Admin only' }, { status: 403 });
+  const userId = session.userId;
 
   const { id, read } = await req.json();
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
@@ -111,8 +115,10 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const userId = await getUserFromJwt(req);
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const session = await getUserFromJwt(req);
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (session.role === 'CLIENT') return NextResponse.json({ error: 'Admin only' }, { status: 403 });
+  const userId = session.userId;
 
   const url = new URL(req.url);
   const id = url.searchParams.get('id');

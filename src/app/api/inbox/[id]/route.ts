@@ -3,17 +3,17 @@
  *
  * Returns the full email (including htmlBody / textBody) and marks it as read.
  */
-import { JWT_SECRET } from '@/lib/jwt';
+import { getJWTSecret } from '@/lib/jwt';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
-async function getUserFromJwt(req: NextRequest): Promise<string | null> {
+async function getUserFromJwt(req: NextRequest): Promise<{ userId: string; role: string } | null> {
   const { jwtVerify } = await import('jose');
   const token = req.cookies.get('sf_token')?.value;
   if (!token) return null;
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET);
-    return (payload.sub as string) || null;
+    const { payload } = await jwtVerify(token, getJWTSecret());
+    return { userId: (payload.sub as string) || '', role: (payload.role as string) || '' };
   } catch {
     return null;
   }
@@ -23,8 +23,10 @@ export async function GET(
   req: NextRequest,
   ctx: { params: Promise<{ id: string }> }
 ) {
-  const userId = await getUserFromJwt(req);
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const session = await getUserFromJwt(req);
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (session.role === 'CLIENT') return NextResponse.json({ error: 'Admin only' }, { status: 403 });
+  const userId = session.userId;
 
   const { id } = await ctx.params;
   const email = await prisma.inboundEmail.findUnique({ where: { id } });

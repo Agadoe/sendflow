@@ -59,4 +59,9 @@ export const contactFormSchema = z.object({
   email: emailSchema,
   message: z.string().min(1, 'Message is required').max(5000),
   phone: z.string().max(20).optional(),
+  subject: z.string().max(200).optional(),
+});
+
+export const deleteClientSchema = z.object({
+  id: z.string().min(1, 'Client ID is required'),
 });
