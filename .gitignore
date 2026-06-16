@@ -20,3 +20,4 @@ tsconfig.tsbuildinfo
 .env.bak
 .env.local
 test-results/
+MEMORY-BUGS.md
