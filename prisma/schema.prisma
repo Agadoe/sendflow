@@ -18,6 +18,7 @@ model User {
   emailVerified DateTime?
   isOwner       Boolean   @default(false)
   role          String    @default("CLIENT") // ADMIN | CLIENT
+  timezone      String    @default("UTC")
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -119,6 +120,15 @@ model Contact {
   name      String?
   tags      String   @default("[]")
   createdAt DateTime @default(now())
+
+  // WhatsApp opt-in compliance
+  optedIn     Boolean   @default(false)
+  optedInAt   DateTime?
+  optedInSource String? // e.g. "website-signup", "manual-import"
+
+  // Anti-spam / duplicate detection
+  lastMessageContent String?
+  lastMessageSentAt  DateTime?
 
   user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
   messages              Message[]
