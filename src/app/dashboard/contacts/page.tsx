@@ -1,18 +1,27 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import toast from 'react-hot-toast';
+import toast, { Toaster } from 'react-hot-toast';
 
 export default function ContactsPage() {
   const [contacts, setContacts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showImport, setShowImport] = useState(false);
+  const [showManualAdd, setShowManualAdd] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [savingManual, setSavingManual] = useState(false);
   const [csvData, setCsvData] = useState<string[][]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
   const [phoneCol, setPhoneCol] = useState(0);
   const [nameCol, setNameCol] = useState(-1);
+  const [csvOptIn, setCsvOptIn] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Manual add form
+  const [manualName, setManualName] = useState('');
+  const [manualPhone, setManualPhone] = useState('');
+  const [manualTags, setManualTags] = useState('');
+  const [manualOptIn, setManualOptIn] = useState(false);
 
   useEffect(() => {
     loadContacts();
@@ -56,17 +65,24 @@ export default function ContactsPage() {
       setHeaders(rows[0]);
       setCsvData(rows.slice(1));
       setShowImport(true);
+      setShowManualAdd(false);
     };
     reader.readAsText(file);
   }
 
   async function handleImport() {
     if (csvData.length === 0) return;
+    if (!csvOptIn) {
+      toast.error('Please confirm that all imported contacts have opted in to WhatsApp messages.');
+      return;
+    }
     setImporting(true);
     try {
       const toImport = csvData.map(row => ({
         phone: row[phoneCol]?.replace(/\D/g, '') || '',
         name: nameCol >= 0 ? row[nameCol] || undefined : undefined,
+        optedIn: true,
+        optedInSource: 'csv-import',
       })).filter(c => c.phone.length >= 9);
 
       const res = await fetch('/api/contacts', {
@@ -76,14 +92,59 @@ export default function ContactsPage() {
       });
       const data = await res.json();
       if (res.ok) {
-        toast.success(`Imported ${data.count} contacts!`);
+        toast.success(`Imported ${data.created} contacts! ${data.skipped > 0 ? `(${data.skipped} duplicates skipped)` : ''}`);
         setShowImport(false);
+        setCsvData([]);
+        setHeaders([]);
+        setCsvOptIn(false);
         loadContacts();
       } else {
         toast.error(data.error || 'Import failed');
       }
     } finally {
       setImporting(false);
+    }
+  }
+
+  async function handleManualAdd(e: React.FormEvent) {
+    e.preventDefault();
+    if (!manualPhone || manualPhone.replace(/\D/g, '').length < 9) {
+      toast.error('Please enter a valid phone number');
+      return;
+    }
+    if (!manualOptIn) {
+      toast.error('Please confirm that this contact has opted in to WhatsApp messages.');
+      return;
+    }
+    setSavingManual(true);
+    try {
+      const res = await fetch('/api/contacts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contacts: [{
+            phone: manualPhone.replace(/\D/g, ''),
+            name: manualName || undefined,
+            tags: manualTags.split(',').map(t => t.trim()).filter(Boolean),
+            optedIn: true,
+            optedInSource: 'manual-add',
+          }]
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success('Contact added!');
+        setManualName('');
+        setManualPhone('');
+        setManualTags('');
+        setManualOptIn(false);
+        setShowManualAdd(false);
+        loadContacts();
+      } else {
+        toast.error(data.error || 'Failed to add contact');
+      }
+    } finally {
+      setSavingManual(false);
     }
   }
 
@@ -94,8 +155,22 @@ export default function ContactsPage() {
     toast.success('Contact deleted');
   }
 
+  function openManualAdd() {
+    setShowManualAdd(true);
+    setShowImport(false);
+    setCsvData([]);
+    setHeaders([]);
+  }
+
+  function openImport() {
+    setShowImport(true);
+    setShowManualAdd(false);
+    fileRef.current?.click();
+  }
+
   return (
     <div className="max-w-4xl space-y-6">
+      <Toaster position="top-right" />
       <div className="flex items-center justify-between">
         <div>
           <h1 className="font-heading text-2xl text-slate">Contacts</h1>
@@ -110,7 +185,7 @@ export default function ContactsPage() {
             <input ref={fileRef} type="file" accept=".csv,.txt" className="hidden" onChange={handleFile} />
           </label>
           <button
-            onClick={() => setShowImport(true)}
+            onClick={openManualAdd}
             className="flex items-center gap-2 bg-amber hover:bg-amber-dark text-white text-sm font-semibold px-4 py-2.5 rounded-btn transition-colors"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -128,10 +203,15 @@ export default function ContactsPage() {
           <div className="text-5xl mb-4">👥</div>
           <h3 className="font-heading text-xl text-slate mb-2">No contacts yet</h3>
           <p className="text-slate-light mb-6">Import a CSV or add contacts one by one to get started.</p>
-          <label className="inline-block bg-amber hover:bg-amber-dark text-white font-semibold px-6 py-3 rounded-btn cursor-pointer transition-colors">
-            Import CSV
-            <input type="file" accept=".csv,.txt" className="hidden" onChange={handleFile} />
-          </label>
+          <div className="flex gap-3 justify-center">
+            <label className="inline-block bg-gray-100 hover:bg-gray-200 text-slate font-semibold px-6 py-3 rounded-btn cursor-pointer transition-colors">
+              Import CSV
+              <input type="file" accept=".csv,.txt" className="hidden" onChange={handleFile} />
+            </label>
+            <button onClick={openManualAdd} className="inline-block bg-amber hover:bg-amber-dark text-white font-semibold px-6 py-3 rounded-btn transition-colors">
+              Add Manually
+            </button>
+          </div>
         </div>
       ) : (
         <div className="bg-surface rounded-card border border-gray-100 overflow-hidden">
@@ -140,6 +220,7 @@ export default function ContactsPage() {
               <tr className="border-b border-gray-100 bg-gray-50/50">
                 <th className="text-left px-6 py-3 text-xs font-semibold text-slate-light uppercase tracking-wider">Name</th>
                 <th className="text-left px-6 py-3 text-xs font-semibold text-slate-light uppercase tracking-wider">Phone</th>
+                <th className="text-left px-6 py-3 text-xs font-semibold text-slate-light uppercase tracking-wider">WhatsApp</th>
                 <th className="text-left px-6 py-3 text-xs font-semibold text-slate-light uppercase tracking-wider">Tags</th>
                 <th className="text-left px-6 py-3 text-xs font-semibold text-slate-light uppercase tracking-wider">Added</th>
                 <th className="px-6 py-3" />
@@ -152,6 +233,16 @@ export default function ContactsPage() {
                   <tr key={c.id} className="hover:bg-gray-50/50 transition-colors">
                     <td className="px-6 py-4 text-sm font-medium text-slate">{c.name || '—'}</td>
                     <td className="px-6 py-4 text-sm text-slate font-mono">{c.phone}</td>
+                    <td className="px-6 py-4">
+                      {c.optedIn ? (
+                        <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium flex items-center gap-1 w-fit">
+                          <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                          Opted in
+                        </span>
+                      ) : (
+                        <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-medium">Not opted in</span>
+                      )}
+                    </td>
                     <td className="px-6 py-4">
                       <div className="flex gap-1 flex-wrap">
                         {tags.map((t: string) => (
@@ -172,6 +263,80 @@ export default function ContactsPage() {
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Manual Add Modal */}
+      {showManualAdd && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-surface rounded-card w-full max-w-lg shadow-2xl">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <h3 className="font-heading text-xl text-slate">Add Contact</h3>
+              <button onClick={() => setShowManualAdd(false)} className="text-slate-light hover:text-slate">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <form onSubmit={handleManualAdd} className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate mb-1.5">Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Jane Doe"
+                  value={manualName}
+                  onChange={e => setManualName(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-btn border border-gray-200 text-slate placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber/40"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate mb-1.5">Phone *</label>
+                <input
+                  type="tel"
+                  placeholder="e.g. 024 123 4567"
+                  value={manualPhone}
+                  onChange={e => setManualPhone(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-btn border border-gray-200 text-slate placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber/40"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate mb-1.5">Tags (comma separated)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. VIP, Lagos, Braids"
+                  value={manualTags}
+                  onChange={e => setManualTags(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-btn border border-gray-200 text-slate placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber/40"
+                />
+              </div>
+              <div className="bg-amber/5 border border-amber/10 rounded-lg p-4 space-y-3">
+                <div className="flex items-start gap-3">
+                  <input
+                    id="manual-optin"
+                    type="checkbox"
+                    checked={manualOptIn}
+                    onChange={e => setManualOptIn(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 text-amber border-gray-300 rounded focus:ring-amber"
+                    required
+                  />
+                  <label htmlFor="manual-optin" className="text-sm text-slate">
+                    <span className="font-medium">This contact has opted in to receive WhatsApp messages.</span>
+                    <p className="text-slate-light text-xs mt-1">
+                      By checking this box, you confirm this person has explicitly consented to receiving WhatsApp messages from your business. Required for compliance.
+                    </p>
+                  </label>
+                </div>
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setShowManualAdd(false)} className="flex-1 py-2.5 rounded-btn bg-gray-100 hover:bg-gray-200 text-slate font-medium transition-colors">Cancel</button>
+                <button type="submit" disabled={savingManual} className="flex-1 py-2.5 rounded-btn bg-amber hover:bg-amber-dark text-white font-semibold transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
+                  {savingManual ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : null}
+                  {savingManual ? 'Saving...' : 'Add Contact'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 
@@ -225,8 +390,25 @@ export default function ContactsPage() {
                     </table>
                     {csvData.length > 5 && <div className="px-3 py-2 text-xs text-slate-light bg-gray-50">+ {csvData.length - 5} more rows</div>}
                   </div>
+                  <div className="bg-amber/5 border border-amber/10 rounded-lg p-4">
+                    <div className="flex items-start gap-3">
+                      <input
+                        id="csv-optin"
+                        type="checkbox"
+                        checked={csvOptIn}
+                        onChange={e => setCsvOptIn(e.target.checked)}
+                        className="mt-0.5 w-4 h-4 text-amber border-gray-300 rounded focus:ring-amber"
+                      />
+                      <label htmlFor="csv-optin" className="text-sm text-slate">
+                        <span className="font-medium">I confirm all imported contacts have opted in to WhatsApp messages.</span>
+                        <p className="text-slate-light text-xs mt-1">
+                          You must have explicit consent from every person in this list before sending them WhatsApp messages. Importing without consent violates WhatsApp's Terms of Service and may result in permanent account bans.
+                        </p>
+                      </label>
+                    </div>
+                  </div>
                   <div className="flex gap-3">
-                    <button onClick={() => { setCsvData([]); setHeaders([]); }} className="flex-1 py-2.5 rounded-btn bg-gray-100 hover:bg-gray-200 text-slate font-medium transition-colors">Back</button>
+                    <button onClick={() => { setCsvData([]); setHeaders([]); setCsvOptIn(false); }} className="flex-1 py-2.5 rounded-btn bg-gray-100 hover:bg-gray-200 text-slate font-medium transition-colors">Back</button>
                     <button onClick={handleImport} disabled={importing} className="flex-1 py-2.5 rounded-btn bg-amber hover:bg-amber-dark text-white font-semibold transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
                       {importing ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : null}
                       {importing ? `Importing ${csvData.length}...` : `Import ${csvData.length} Contacts`}

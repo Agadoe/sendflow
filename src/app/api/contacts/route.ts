@@ -86,6 +86,9 @@ export async function POST(req: Request) {
             phone,
             name: c.name || null,
             tags: JSON.stringify(Array.isArray(c.tags) ? c.tags : []),
+            optedIn: c.optedIn === true,
+            optedInAt: c.optedIn === true ? new Date() : null,
+            optedInSource: c.optedIn === true ? (c.optedInSource || 'manual-import') : null,
           },
         });
         results.created++;
