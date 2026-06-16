@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 import https from 'https';
 import http from 'http';
 
-const DAEMON_URL = process.env.WACLI_DAEMON_URL || 'http://84.8.221.131/wacli/';
+const DAEMON_URL = process.env.WACLI_DAEMON_URL || 'http://84.8.221.131';
 
 function fetchDaemon(
   path: string,
@@ -49,7 +49,7 @@ export async function POST() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const res = await fetchDaemon('/connect', {
+    const res = await fetchDaemon('/wacli/connect', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -85,7 +85,7 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const res = await fetchDaemon('/qr', {
+    const res = await fetchDaemon('/wacli/qr', {
       headers: {
         'X-User-Id': user.id
       }

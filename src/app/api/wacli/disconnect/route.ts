@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 import https from 'https';
 import http from 'http';
 
-const DAEMON_URL = process.env.WACLI_DAEMON_URL || 'http://84.8.221.131/wacli/';
+const DAEMON_URL = process.env.WACLI_DAEMON_URL || 'http://84.8.221.131';
 
 function fetchDaemon(
   path: string,
@@ -48,7 +48,7 @@ export async function POST() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const res = await fetchDaemon('/disconnect', {
+    const res = await fetchDaemon('/wacli/disconnect', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

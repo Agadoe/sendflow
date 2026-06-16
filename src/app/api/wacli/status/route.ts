@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 import https from 'https';
 import http from 'http';
 
-const DAEMON_URL = process.env.WACLI_DAEMON_URL || 'http://84.8.221.131/wacli/';
+const DAEMON_URL = process.env.WACLI_DAEMON_URL || 'http://84.8.221.131';
 
 function fetchDaemon(
   path: string,
@@ -49,9 +49,7 @@ export async function GET() {
     }
 
     // Fetch status from the daemon (uses /health which returns { connection })
-    console.log("DEBUG: DAEMON_URL =", DAEMON_URL);
-    const testUrl = new URL("/health", DAEMON_URL);
-    console.log("DEBUG: fetch URL =", testUrl.href);    const res = await fetchDaemon('/health', {
+const res = await fetchDaemon('/wacli/health', {
       headers: {
         'X-User-Id': user.id
       }
