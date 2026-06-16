@@ -19,3 +19,4 @@ tsconfig.tsbuildinfo
 .env
 .env.bak
 .env.local
+test-results/

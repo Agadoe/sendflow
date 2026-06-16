@@ -7,12 +7,8 @@ import { test, expect, type Page } from '@playwright/test';
  *   1. Register + verify user
  *   2. Land on /dashboard/connect
  *   3. Click "Connect" → POST /api/wacli/connect
- *   4. Daemon generates QR → /api/wacli/qr returns it
+ *   4. Daemon generates QR → GET /api/wacli/connect (QR handler) returns it
  *   5. /api/wacli/status reports the connection state
- *
- * IMPORTANT: This will trigger a real Baileys socket on the VPS daemon.
- * The daemon's connection state will change from "idle" to "connecting"
- * for the duration of the test. This is expected and desired.
  */
 
 const STAMP = Date.now();
@@ -55,10 +51,11 @@ test.describe.serial('/dashboard/connect flow', () => {
       sameSite: 'Lax',
     }]);
 
-    // Step 2: Status API sanity (should return DISCONNECTED initially)
+    // Step 2: Status API sanity — should be DISCONNECTED (daemon idle)
     const statusBefore = await page.request.get('/api/wacli/status');
     const statusBeforeBody = await statusBefore.json();
     console.log('STATUS BEFORE:', JSON.stringify(statusBeforeBody));
+    expect(statusBefore).toBeOK();
     expect(statusBeforeBody).toHaveProperty('state');
     expect(statusBeforeBody.state).toMatch(/DISCONNECTED|ERROR|CONNECTING|CONNECTED/);
 
@@ -74,38 +71,39 @@ test.describe.serial('/dashboard/connect flow', () => {
     expect(btnCount).toBeGreaterThan(0);
 
     await connectBtn.click();
-    await page.waitForTimeout(500); // give the API a moment
+    await page.waitForTimeout(500);
     await page.screenshot({ path: '/tmp/connect-2-clicked.png', fullPage: true });
 
     // Step 5: Check status after connect call
     const statusAfter = await page.request.get('/api/wacli/status');
     const statusAfterBody = await statusAfter.json();
     console.log('STATUS AFTER CONNECT:', JSON.stringify(statusAfterBody));
+    expect(statusAfter).toBeOK();
 
-    // Step 6: Check QR endpoint
-    const qrRes = await page.request.get('/api/wacli/qr');
-    const qrBody = await qrRes.json();
-    console.log('QR ENDPOINT:', qrRes.status(), JSON.stringify(qrBody).slice(0, 300));
+    // Step 6: Check QR endpoint — QR handler lives at GET /api/wacli/connect
+    const qrRes = await page.request.get('/api/wacli/connect');
+    const qrText = await qrRes.text();
+    console.log('QR STATUS:', qrRes.status(), 'BODY:', qrText.slice(0, 300));
+    expect(qrRes.ok()).toBeTruthy();
 
-    // The QR should either be: waiting (daemon still spinning up),
-    // pending with a qr string, or already_connected.
-    expect(qrBody).toHaveProperty('status');
-    expect(['waiting', 'pending', 'already_connected']).toContain(qrBody.status);
+    const qrBody = JSON.parse(qrText);
+    expect(qrBody).toHaveProperty('success');
+    expect(qrBody.success).toBe(true);
+    expect(qrBody.state).toMatch(/QR_READY|CONNECTING|CONNECTED|DISCONNECTED/);
 
-    // If we got a QR, validate it's a string
-    if (qrBody.status === 'pending') {
+    if (qrBody.qr) {
       expect(typeof qrBody.qr).toBe('string');
       expect(qrBody.qr.length).toBeGreaterThan(50);
       console.log('QR string length:', qrBody.qr.length);
     }
 
-    // Wait a bit and check status one more time to see if state changed
-    await page.waitForTimeout(3000);
+    // Step 7: Wait and check final status
+    await page.waitForTimeout(2000);
     const statusFinal = await page.request.get('/api/wacli/status');
     const statusFinalBody = await statusFinal.json();
     console.log('STATUS FINAL:', JSON.stringify(statusFinalBody));
 
-    // Step 7: Disconnect to clean up
+    // Step 8: Disconnect to clean up the daemon
     const disconnectRes = await page.request.post('/api/wacli/disconnect');
     const disconnectBody = await disconnectRes.json();
     console.log('DISCONNECT:', disconnectRes.status(), JSON.stringify(disconnectBody));
