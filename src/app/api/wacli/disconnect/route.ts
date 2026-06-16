@@ -4,26 +4,20 @@ import { prisma } from '@/lib/prisma';
 import https from 'https';
 import http from 'http';
 
-const DAEMON_URL = process.env.WACLI_DAEMON_URL || 'http://84.8.221.131/wacli/';
+const DAEMON_URL = process.env.WACLI_DAEMON_URL || 'http://84.8.221.131';
 
 function fetchDaemon(
   path: string,
   options: { method?: string; headers?: http.OutgoingHttpHeaders; body?: string } = {}
 ): Promise<{ ok: boolean; status: number; json: () => Promise<any> }> {
   return new Promise((resolve, reject) => {
-    const base = new URL(DAEMON_URL);
-    // Preserve base path prefix (e.g. /wacli/) instead of letting a leading
-    // slash on `path` replace the entire pathname.
-    let basePath = base.pathname;
-    if (!basePath.endsWith('/')) basePath += '/';
-    base.pathname = basePath + path.replace(/^\//, '');
-
-    const client = base.protocol === 'https:' ? https : http;
+    const url = new URL(path, DAEMON_URL);
+    const client = url.protocol === 'https:' ? https : http;
     const req = client.request(
       {
-        hostname: base.hostname,
-        port: base.port || undefined,
-        path: base.pathname + base.search,
+        hostname: url.hostname,
+        port: url.port || undefined,
+        path: url.pathname + url.search,
         method: options.method || 'GET',
         headers: options.headers,
         rejectUnauthorized: false,
@@ -54,7 +48,7 @@ export async function POST() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const res = await fetchDaemon('/disconnect', {
+    const res = await fetchDaemon('/wacli/disconnect', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -75,7 +69,7 @@ export async function POST() {
       }
     });
 
-    return NextResponse.json({ success: true, state: data.state || 'DISCONNECTED' });
+    return NextResponse.json({ success: true, state: 'DISCONNECTED' });
   } catch (e: any) {
     return NextResponse.json({ success: false, error: e.message }, { status: 500 });
   }

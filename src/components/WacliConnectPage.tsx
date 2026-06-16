@@ -9,8 +9,8 @@ type WacliState = 'DISCONNECTED' | 'QR_READY' | 'CONNECTED' | 'ERROR' | string;
 export default function WacliConnectPage() {
   const [connected, setConnected] = useState(false);
   const [checking, setChecking] = useState(true);
-  const [qrCode, setQrCode] = useState<string | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [qrCode, setQrCode] = useState<string | null>(null);
   const [state, setState] = useState<WacliState>('DISCONNECTED');
   const [phone, setPhone] = useState<string | null>(null);
   const [polling, setPolling] = useState(false);
@@ -70,62 +70,58 @@ export default function WacliConnectPage() {
       }
 
       // Fetch the QR — daemon takes a moment to generate one after /connect
-      toast.loading(‘Generating QR code…’, { id: ‘qr’ });
+      toast.loading('Generating QR code…', { id: 'qr' });
       await new Promise((r) => setTimeout(r, 2000));
       await fetchQrAndRender(1);
     } catch (err: any) {
-      console.error(‘handleConnect error:’, err);
-      toast.dismiss(‘connect’);
-      toast.error(‘Connection failed’);
+      console.error('handleConnect error:', err);
+      toast.dismiss('connect');
+      toast.error('Connection failed');
     }
   }
 
   async function fetchQrAndRender(attempt = 1) {
     const MAX_ATTEMPTS = 10;
     try {
-      const qrRes = await fetch(‘/api/wacli/connect’, { cache: ‘no-store’ });
+      const qrRes = await fetch('/api/wacli/connect', { cache: 'no-store' });
       const qrData = await qrRes.json();
-
+      toast.dismiss('qr');
       if (!qrRes.ok) {
-        toast.dismiss(‘qr’);
-        toast.error(qrData.error || ‘Failed to fetch QR’);
+        toast.error(qrData.error || 'Failed to fetch QR');
         return;
       }
 
       if (qrData.qr) {
-        toast.dismiss(‘qr’);
         try {
           const dataUrl = await QRCode.toDataURL(qrData.qr, {
             width: 280,
             margin: 2,
-            color: { dark: ‘#000000’, light: ‘#ffffff’ },
+            color: { dark: '#000000', light: '#ffffff' },
           });
           setQrDataUrl(dataUrl);
         } catch (qrErr) {
-          console.error(‘QRCode.toDataURL failed:’, qrErr);
+          console.error('QRCode.toDataURL failed:', qrErr);
         }
         setQrCode(qrData.qr);
-        setState(‘QR_READY’);
+        setState('QR_READY');
         setPolling(true);
-        toast.success(‘Scan the QR with your phone — we’ll detect it automatically’);
-      } else if (qrData.state === ‘CONNECTED’) {
-        toast.dismiss(‘qr’);
+        toast.success("Scan the QR with your phone — we'll detect it automatically");
+      } else if (qrData.state === 'CONNECTED') {
         setConnected(true);
         setQrCode(null);
         setQrDataUrl(null);
         setPolling(false);
-        toast.success(‘WhatsApp connected’);
-      } else if (qrData.state === ‘CONNECTING’ && attempt < MAX_ATTEMPTS) {
-        toast.loading(`Generating QR code… (attempt ${attempt}/${MAX_ATTEMPTS})`, { id: ‘qr’ });
+        toast.success('WhatsApp connected');
+      } else if (qrData.state === 'CONNECTING' && attempt < MAX_ATTEMPTS) {
+        toast.loading(`Generating QR code… (attempt ${attempt}/${MAX_ATTEMPTS})`, { id: 'qr' });
         setTimeout(() => fetchQrAndRender(attempt + 1), 3000);
       } else {
-        toast.dismiss(‘qr’);
-        toast.error(‘Could not generate QR — try again in a moment’);
+        toast.error('Could not generate QR — try again in a moment');
       }
     } catch (err: any) {
-      console.error(‘fetchQrAndRender error:’, err);
-      toast.dismiss(‘qr’);
-      toast.error(‘Failed to fetch QR’);
+      console.error('fetchQrAndRender error:', err);
+      toast.dismiss('qr');
+      toast.error('Failed to fetch QR');
     }
   }
 

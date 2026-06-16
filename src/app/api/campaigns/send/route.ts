@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
 
-const DAEMON_URL = process.env.WACLI_DAEMON_URL || 'http://127.0.0.1:4555';
+const DAEMON_URL = process.env.WACLI_DAEMON_URL || 'http://84.8.221.131/wacli';
 
 function formatPhone(phone: string): string {
   const clean = (phone || '').replace(/\D/g, '');

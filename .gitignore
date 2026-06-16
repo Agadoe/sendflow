@@ -13,6 +13,7 @@ tsconfig.tsbuildinfo
 .env.deployed
 .env.vercel
 .env.bak
+.env.production
 
 # Local databases
 *.db
@@ -40,3 +41,13 @@ playwright-report/
 # Waitlist / user data exports (PII)
 *.csv
 sendflow-waitlist.csv
+
+# Build artifacts (added 2026-06-05)
+.next/trace
+tsconfig.tsbuildinfo
+
+# Local secrets (must never be committed)
+.env
+.env.bak
+.env.local
+MEMORY-BUGS.md

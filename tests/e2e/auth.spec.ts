@@ -1,4 +1,5 @@
 import { test, expect, type Page, type BrowserContext } from '@playwright/test';
+import { registerAndGetSessionCookie } from './helpers/auth';
 
 /**
  * SendFlow Auth E2E (deployed)
@@ -27,30 +28,6 @@ const ADMIN_PASSWORD = 'E2eTest!2026';
  * Full flow: register → resend-verify (test mode returns token) → verify-email.
  * Returns the sf_token cookie value — no email access needed.
  */
-async function registerAndGetSessionCookie(request: any, name: string, email: string, password: string): Promise<string> {
-  // 1. Register — creates user + VerificationToken, sends email, returns 202
-  const regRes = await request.post('/api/auth/register', { data: { name, email, password } });
-  if (regRes.status() !== 202) throw new Error(`register failed: ${regRes.status()}`);
-
-  // 2. Resend — in test mode the response includes { token, verifyUrl }
-  const resendRes = await request.post('/api/auth/resend-verify', {
-    headers: { 'Content-Type': 'application/json' },
-    data: JSON.stringify({ email }),
-  });
-  if (resendRes.status() !== 200) throw new Error(`resend-verify failed: ${resendRes.status()}`);
-  const resendBody = await resendRes.json();
-  if (!resendBody.token) throw new Error(`No token in resend-verify response: ${JSON.stringify(resendBody)}`);
-
-  // 3. Verify the token — capture Set-Cookie on the 302
-  const verifyRes = await request.get(`/api/auth/verify-email?token=${encodeURIComponent(resendBody.token)}`, {
-    maxRedirects: 0,
-  });
-  const setCookie = verifyRes.headers()['set-cookie'] || '';
-  const cookieMatch = setCookie.match(/sf_token=([^;]+)/);
-  if (!cookieMatch) throw new Error(`No sf_token in Set-Cookie from verify-email: "${setCookie}"`);
-  return cookieMatch[1];
-}
-
 async function register(page: Page, name: string, email: string, password: string) {
   await page.goto('/register');
   await page.getByPlaceholder('Esther Mensah').fill(name);
