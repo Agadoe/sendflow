@@ -48,7 +48,7 @@ export async function POST() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const res = await fetchDaemon('/wacli/disconnect', {
+    const res = await fetchDaemon('/disconnect', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -69,7 +69,7 @@ export async function POST() {
       }
     });
 
-    return NextResponse.json({ success: true, state: data.state || 'DISCONNECTED' });
+    return NextResponse.json({ success: true, state: 'DISCONNECTED' });
   } catch (e: any) {
     return NextResponse.json({ success: false, error: e.message }, { status: 500 });
   }

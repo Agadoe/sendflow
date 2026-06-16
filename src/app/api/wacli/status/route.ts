@@ -48,8 +48,8 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Fetch status from the multi-tenant daemon
-    const res = await fetchDaemon('/wacli/status', {
+    // Fetch status from the daemon (uses /health which returns { connection })
+    const res = await fetchDaemon('/health', {
       headers: {
         'X-User-Id': user.id
       }
@@ -62,19 +62,23 @@ export async function GET() {
     
     const data = await res.json();
     
-    // Update user's wacli status in the database
-    if (data.state) {
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { 
-          wacliStatus: data.state,
-          wacliPhone: data.phone || null,
-          wacliLastConnectedAt: data.connected ? new Date() : null
-        }
-      });
-    }
+    // Translate daemon { status, connection } → app { connected, state, phone }
+    const isOpen = data.connection === 'open';
+    const state = isOpen ? 'CONNECTED'
+      : data.status === 'error' ? 'ERROR'
+      : 'DISCONNECTED';
     
-    return NextResponse.json(data);
+    // Update user's wacli status in the database
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { 
+        wacliStatus: state,
+        wacliPhone: null, // daemon does not expose phone number
+        wacliLastConnectedAt: isOpen ? new Date() : null
+      }
+    });
+    
+    return NextResponse.json({ connected: isOpen, state, phone: null });
   } catch (error) {
     console.error('Error fetching wacli status:', error);
     // Fetch failed entirely — daemon is not reachable

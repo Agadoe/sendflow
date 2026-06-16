@@ -49,7 +49,7 @@ export async function POST() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const res = await fetchDaemon('/wacli/connect', {
+    const res = await fetchDaemon('/connect', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -61,15 +61,16 @@ export async function POST() {
     const data = await res.json();
     if (!res.ok) return NextResponse.json(data, { status: res.status });
     
-    // Update user's wacli status
+    // Translate daemon { status: 'connecting' | 'already_connected' | 'error' } → app state
+    const state = data.status === 'already_connected' ? 'CONNECTED' : 'QR_READY';
     await prisma.user.update({
       where: { id: user.id },
       data: { 
-        wacliStatus: data.state || 'QR_READY'
+        wacliStatus: state
       }
     });
     
-    return NextResponse.json({ success: true, state: data.state });
+    return NextResponse.json({ success: true, state });
   } catch (e: any) {
     return NextResponse.json({ error: 'Failed to reconnect: ' + e.message }, { status: 500 });
   }
@@ -84,7 +85,7 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const res = await fetchDaemon('/wacli/qr', {
+    const res = await fetchDaemon('/qr', {
       headers: {
         'X-User-Id': user.id
       }
@@ -93,16 +94,21 @@ export async function GET() {
     const data = await res.json();
     if (!res.ok) return NextResponse.json(data, { status: res.status });
     
-    // Update user's QR code
+    // Translate daemon { status, qr } → app { qr, state }
+    let appState: string = 'QR_READY';
+    if (data.status === 'already_connected') appState = 'CONNECTED';
+    else if (data.status === 'waiting') appState = 'CONNECTING';
+    else if (!data.qr) appState = 'DISCONNECTED';
+    
     await prisma.user.update({
       where: { id: user.id },
       data: { 
-        wacliQrCode: data.qr,
-        wacliStatus: data.state || 'QR_READY'
+        wacliQrCode: data.qr || null,
+        wacliStatus: appState
       }
     });
     
-    return NextResponse.json({ qr: data.qr, state: data.state, success: true });
+    return NextResponse.json({ qr: data.qr, state: appState, success: true });
   } catch (e: any) {
     return NextResponse.json({ error: 'Failed to get QR: ' + e.message }, { status: 500 });
   }

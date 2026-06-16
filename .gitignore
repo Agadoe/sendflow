@@ -3,6 +3,7 @@ node_modules/
 .env
 .env.local
 .env.*.local
+.env.production
 *.db
 *.db-journal
 .DS_Store
@@ -10,10 +11,11 @@ vercel.json
 .vercel
 .env*.local
 
-.env
-.env.bak
-.env.local
-
 # Build artifacts (added 2026-06-05)
 .next/trace
 tsconfig.tsbuildinfo
+
+# Local secrets (must never be committed)
+.env
+.env.bak
+.env.local
