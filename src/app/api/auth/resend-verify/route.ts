@@ -3,8 +3,8 @@ import { randomBytes } from 'crypto';
 import { prisma } from '@/lib/prisma';
 import { sendMail } from '@/lib/email';
 
-// 3 resend requests per 10 min per IP.
-const LIMIT = { max: 3, windowSec: 600 };
+// 10 resend requests per 10 min per IP.
+const LIMIT = { max: 10, windowSec: 600 };
 
 // Test mode: when enabled, return the raw token in the response so e2e tests
 // can verify without needing email access. Flip with MAGIC_LINK_TEST_MODE=false to disable.

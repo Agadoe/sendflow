@@ -4,7 +4,7 @@ import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { sendMail } from '@/lib/email';
 
-const LIMIT = { max: 3, windowSec: 600 }; // 3 signups / 10 min / IP
+const LIMIT = { max: 10, windowSec: 600 }; // 10 signups / 10 min / IP
 
 export async function POST(req: Request) {
   // Rate limit

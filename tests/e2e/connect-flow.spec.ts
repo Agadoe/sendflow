@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { registerAndGetSessionCookie } from './helpers/auth';
 
 /**
  * SendFlow /dashboard/connect E2E (deployed)
@@ -15,27 +16,6 @@ const STAMP = Date.now();
 const EMAIL = `e2e-connect-${STAMP}@sendflow.test`;
 const NAME = `E2E Connect ${STAMP}`;
 const PASSWORD = 'E2eTest!2026';
-
-async function registerAndGetSessionCookie(request: any, name: string, email: string, password: string): Promise<string> {
-  const regRes = await request.post('/api/auth/register', { data: { name, email, password } });
-  if (regRes.status() !== 202) throw new Error(`register failed: ${regRes.status()}`);
-
-  const resendRes = await request.post('/api/auth/resend-verify', {
-    headers: { 'Content-Type': 'application/json' },
-    data: JSON.stringify({ email }),
-  });
-  if (resendRes.status() !== 200) throw new Error(`resend-verify failed: ${resendRes.status()}`);
-  const resendBody = await resendRes.json();
-  if (!resendBody.token) throw new Error(`No token: ${JSON.stringify(resendBody)}`);
-
-  const verifyRes = await request.get(`/api/auth/verify-email?token=${encodeURIComponent(resendBody.token)}`, {
-    maxRedirects: 0,
-  });
-  const setCookie = verifyRes.headers()['set-cookie'] || '';
-  const cookieMatch = setCookie.match(/sf_token=([^;]+)/);
-  if (!cookieMatch) throw new Error(`No sf_token: "${setCookie}"`);
-  return cookieMatch[1];
-}
 
 test.describe.serial('/dashboard/connect flow', () => {
   test('full connect flow works end-to-end', async ({ page, context }) => {
