@@ -1,7 +1,49 @@
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
+import https from 'https';
+import http from 'http';
 
-const DAEMON_URL = process.env.WACLI_DAEMON_URL || 'http://127.0.0.1:4555';
+const DAEMON_URL = process.env.WACLI_DAEMON_URL || 'http://84.8.221.131/wacli/';
+
+function fetchDaemon(
+  path: string,
+  options: { method?: string; headers?: http.OutgoingHttpHeaders; body?: string } = {}
+): Promise<{ ok: boolean; status: number; json: () => Promise<any> }> {
+  return new Promise((resolve, reject) => {
+    const base = new URL(DAEMON_URL);
+    // Preserve base path prefix (e.g. /wacli/) instead of letting a leading
+    // slash on `path` replace the entire pathname.
+    let basePath = base.pathname;
+    if (!basePath.endsWith('/')) basePath += '/';
+    base.pathname = basePath + path.replace(/^\//, '');
+
+    const client = base.protocol === 'https:' ? https : http;
+    const req = client.request(
+      {
+        hostname: base.hostname,
+        port: base.port || undefined,
+        path: base.pathname + base.search,
+        method: options.method || 'GET',
+        headers: options.headers,
+        rejectUnauthorized: false,
+      },
+      (res) => {
+        let data = '';
+        res.on('data', (chunk) => (data += chunk));
+        res.on('end', () => {
+          resolve({
+            ok: !!(res.statusCode && res.statusCode >= 200 && res.statusCode < 300),
+            status: res.statusCode || 0,
+            json: () => Promise.resolve(JSON.parse(data)),
+          });
+        });
+      }
+    );
+    req.on('error', reject);
+    if (options.body) req.write(options.body);
+    req.end();
+  });
+}
 
 function formatPhone(phone: string): string {
   const clean = (phone || '').replace(/\D/g, '');
@@ -27,9 +69,9 @@ export async function POST(req: Request) {
     const formatted = formatPhone(phone);
     const body = JSON.stringify({ phone: formatted, message });
 
-    const res = await fetch(`${DAEMON_URL}/send`, {
+    const res = await fetchDaemon('/send', {
       method: 'POST',
-      headers: { 
+      headers: {
         'Content-Type': 'application/json',
         'X-User-Id': user.id
       },

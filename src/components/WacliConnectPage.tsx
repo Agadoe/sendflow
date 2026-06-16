@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
+import QRCode from 'qrcode';
 
 type WacliState = 'DISCONNECTED' | 'QR_READY' | 'CONNECTED' | 'ERROR' | string;
 
@@ -9,6 +10,7 @@ export default function WacliConnectPage() {
   const [connected, setConnected] = useState(false);
   const [checking, setChecking] = useState(true);
   const [qrCode, setQrCode] = useState<string | null>(null);
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [state, setState] = useState<WacliState>('DISCONNECTED');
   const [phone, setPhone] = useState<string | null>(null);
   const [polling, setPolling] = useState(false);
@@ -39,10 +41,12 @@ export default function WacliConnectPage() {
       setConnected(data.connected === true);
       if (data.connected) {
         setQrCode(null);
+        setQrDataUrl(null);
         setPolling(false);
         if (!silent) toast.success('WhatsApp connected');
       }
-    } catch {
+    } catch (err: any) {
+      console.error('checkStatus error:', err);
       if (!silent) toast.error('Could not reach wacli daemon');
     } finally {
       setChecking(false);
@@ -66,28 +70,62 @@ export default function WacliConnectPage() {
       }
 
       // Fetch the QR — daemon takes a moment to generate one after /connect
-      toast.loading('Generating QR code…', { id: 'qr' });
+      toast.loading(‘Generating QR code…’, { id: ‘qr’ });
       await new Promise((r) => setTimeout(r, 2000));
-      const qrRes = await fetch('/api/wacli/connect', { cache: 'no-store' });
+      await fetchQrAndRender(1);
+    } catch (err: any) {
+      console.error(‘handleConnect error:’, err);
+      toast.dismiss(‘connect’);
+      toast.error(‘Connection failed’);
+    }
+  }
+
+  async function fetchQrAndRender(attempt = 1) {
+    const MAX_ATTEMPTS = 10;
+    try {
+      const qrRes = await fetch(‘/api/wacli/connect’, { cache: ‘no-store’ });
       const qrData = await qrRes.json();
-      toast.dismiss('qr');
+
+      if (!qrRes.ok) {
+        toast.dismiss(‘qr’);
+        toast.error(qrData.error || ‘Failed to fetch QR’);
+        return;
+      }
 
       if (qrData.qr) {
+        toast.dismiss(‘qr’);
+        try {
+          const dataUrl = await QRCode.toDataURL(qrData.qr, {
+            width: 280,
+            margin: 2,
+            color: { dark: ‘#000000’, light: ‘#ffffff’ },
+          });
+          setQrDataUrl(dataUrl);
+        } catch (qrErr) {
+          console.error(‘QRCode.toDataURL failed:’, qrErr);
+        }
         setQrCode(qrData.qr);
-        setState('QR_READY');
+        setState(‘QR_READY’);
         setPolling(true);
-        toast.success('Scan the QR with your phone — we’ll detect it automatically');
-      } else if (qrData.state === 'CONNECTED') {
+        toast.success(‘Scan the QR with your phone — we’ll detect it automatically’);
+      } else if (qrData.state === ‘CONNECTED’) {
+        toast.dismiss(‘qr’);
         setConnected(true);
         setQrCode(null);
+        setQrDataUrl(null);
         setPolling(false);
-        toast.success('WhatsApp connected');
+        toast.success(‘WhatsApp connected’);
+      } else if (qrData.state === ‘CONNECTING’ && attempt < MAX_ATTEMPTS) {
+        toast.loading(`Generating QR code… (attempt ${attempt}/${MAX_ATTEMPTS})`, { id: ‘qr’ });
+        setTimeout(() => fetchQrAndRender(attempt + 1), 3000);
       } else {
-        toast.error('Could not generate QR — try again in a moment');
+        toast.dismiss(‘qr’);
+        toast.error(‘Could not generate QR — try again in a moment’);
       }
-    } catch {
-      toast.dismiss('connect');
-      toast.error('Connection failed');
+    } catch (err: any) {
+      console.error(‘fetchQrAndRender error:’, err);
+      toast.dismiss(‘qr’);
+      toast.error(‘Failed to fetch QR’);
     }
   }
 
@@ -97,6 +135,7 @@ export default function WacliConnectPage() {
       await fetch('/api/wacli/disconnect', { method: 'POST' });
       setConnected(false);
       setQrCode(null);
+      setQrDataUrl(null);
       setPolling(false);
       setState('DISCONNECTED');
       toast.success('Disconnected');
@@ -186,9 +225,11 @@ export default function WacliConnectPage() {
             </div>
 
             <div className="bg-white border border-gray-200 rounded-lg p-6 flex flex-col items-center gap-3">
-              <div className="text-xs text-slate-light font-mono break-all max-w-full text-center">
-                {qrCode.slice(0, 80)}…
-              </div>
+              {qrDataUrl ? (
+                <img src={qrDataUrl} alt="WhatsApp QR Code" className="w-64 h-64" />
+              ) : (
+                <div className="w-64 h-64 bg-gray-50 animate-pulse rounded flex items-center justify-center text-sm text-gray-400">Generating…</div>
+              )}
               <div className="text-xs text-amber font-medium">Waiting for scan…</div>
               <div className="flex items-center gap-2 text-xs text-slate-light">
                 <span className="w-2 h-2 border-2 border-amber/30 border-t-amber rounded-full animate-spin" />
@@ -208,7 +249,7 @@ export default function WacliConnectPage() {
             </button>
 
             <button
-              onClick={() => { setQrCode(null); setPolling(false); }}
+              onClick={() => { setQrCode(null); setQrDataUrl(null); setPolling(false); }}
               className="block mx-auto text-xs text-slate-light hover:text-slate"
             >
               Cancel

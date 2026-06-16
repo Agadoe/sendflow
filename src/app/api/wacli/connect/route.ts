@@ -1,8 +1,50 @@
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import https from 'https';
+import http from 'http';
 
-const DAEMON_URL = process.env.WACLI_DAEMON_URL || 'http://127.0.0.1:4555';
+const DAEMON_URL = process.env.WACLI_DAEMON_URL || 'http://84.8.221.131/wacli/';
+
+function fetchDaemon(
+  path: string,
+  options: { method?: string; headers?: http.OutgoingHttpHeaders; body?: string } = {}
+): Promise<{ ok: boolean; status: number; json: () => Promise<any> }> {
+  return new Promise((resolve, reject) => {
+    const base = new URL(DAEMON_URL);
+    // Preserve base path prefix (e.g. /wacli/) instead of letting a leading
+    // slash on `path` replace the entire pathname.
+    let basePath = base.pathname;
+    if (!basePath.endsWith('/')) basePath += '/';
+    base.pathname = basePath + path.replace(/^\//, '');
+
+    const client = base.protocol === 'https:' ? https : http;
+    const req = client.request(
+      {
+        hostname: base.hostname,
+        port: base.port || undefined,
+        path: base.pathname + base.search,
+        method: options.method || 'GET',
+        headers: options.headers,
+        rejectUnauthorized: false,
+      },
+      (res) => {
+        let data = '';
+        res.on('data', (chunk) => (data += chunk));
+        res.on('end', () => {
+          resolve({
+            ok: !!(res.statusCode && res.statusCode >= 200 && res.statusCode < 300),
+            status: res.statusCode || 0,
+            json: () => Promise.resolve(JSON.parse(data)),
+          });
+        });
+      }
+    );
+    req.on('error', reject);
+    if (options.body) req.write(options.body);
+    req.end();
+  });
+}
 
 // POST /connect → regenerate QR and reconnect
 export async function POST() {
@@ -13,25 +55,40 @@ export async function POST() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const res = await fetch(`${DAEMON_URL}/connect`, { 
+    const res = await fetchDaemon('/connect', {
       method: 'POST',
       headers: {
+        'Content-Type': 'application/json',
         'X-User-Id': user.id
-      }
+      },
+      body: JSON.stringify({})
     });
     
     const data = await res.json();
     if (!res.ok) return NextResponse.json(data, { status: res.status });
-    
+
+    // Map daemon status to app state. The daemon returns status values like:
+    // 'already_connected', 'connecting', 'waiting', 'error', etc.
+    // Do NOT assume QR_READY — the QR isn't generated until 3–8s after init.
+    const daemonStatus = data.status || data.state;
+    let appState: string;
+    if (daemonStatus === 'already_connected' || daemonStatus === 'CONNECTED') {
+      appState = 'CONNECTED';
+    } else if (daemonStatus === 'connecting' || daemonStatus === 'RECONNECTING') {
+      appState = 'CONNECTING';
+    } else {
+      appState = 'CONNECTING'; // QR not ready yet — UI should poll
+    }
+
     // Update user's wacli status
     await prisma.user.update({
       where: { id: user.id },
-      data: { 
-        wacliStatus: data.state || 'QR_READY'
+      data: {
+        wacliStatus: appState
       }
     });
-    
-    return NextResponse.json({ success: true, state: data.state });
+
+    return NextResponse.json({ success: true, state: appState });
   } catch (e: any) {
     return NextResponse.json({ error: 'Failed to reconnect: ' + e.message }, { status: 500 });
   }
@@ -46,7 +103,7 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const res = await fetch(`${DAEMON_URL}/qr`, {
+    const res = await fetchDaemon('/qr', {
       headers: {
         'X-User-Id': user.id
       }
@@ -54,17 +111,31 @@ export async function GET() {
     
     const data = await res.json();
     if (!res.ok) return NextResponse.json(data, { status: res.status });
-    
-    // Update user's QR code
+
+    // Exhaustive state mapping — prevents CONNECTING being overwritten by DISCONNECTED
+    const daemonStatus = data.status || data.state;
+    const qr = data.qr || null;
+    let appState: string;
+    if (daemonStatus === 'already_connected' || daemonStatus === 'CONNECTED') {
+      appState = 'CONNECTED';
+    } else if (qr) {
+      appState = 'QR_READY';
+    } else if (daemonStatus === 'waiting' || daemonStatus === 'connecting' || daemonStatus === 'INITIALIZING' || daemonStatus === 'STARTING' || daemonStatus === 'RECONNECTING') {
+      appState = 'CONNECTING';
+    } else {
+      appState = 'DISCONNECTED';
+    }
+
+    // Update user's QR code and status
     await prisma.user.update({
       where: { id: user.id },
-      data: { 
-        wacliQrCode: data.qr,
-        wacliStatus: data.state || 'QR_READY'
+      data: {
+        wacliQrCode: qr,
+        wacliStatus: appState
       }
     });
-    
-    return NextResponse.json({ qr: data.qr, state: data.state, success: true });
+
+    return NextResponse.json({ qr, state: appState, success: true });
   } catch (e: any) {
     return NextResponse.json({ error: 'Failed to get QR: ' + e.message }, { status: 500 });
   }

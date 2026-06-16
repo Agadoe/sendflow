@@ -1,8 +1,50 @@
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import https from 'https';
+import http from 'http';
 
-const DAEMON_URL = process.env.WACLI_DAEMON_URL || 'http://127.0.0.1:4555';
+const DAEMON_URL = process.env.WACLI_DAEMON_URL || 'http://84.8.221.131/wacli/';
+
+function fetchDaemon(
+  path: string,
+  options: { method?: string; headers?: http.OutgoingHttpHeaders; body?: string } = {}
+): Promise<{ ok: boolean; status: number; json: () => Promise<any> }> {
+  return new Promise((resolve, reject) => {
+    const base = new URL(DAEMON_URL);
+    // Preserve base path prefix (e.g. /wacli/) instead of letting a leading
+    // slash on `path` replace the entire pathname.
+    let basePath = base.pathname;
+    if (!basePath.endsWith('/')) basePath += '/';
+    base.pathname = basePath + path.replace(/^\//, '');
+
+    const client = base.protocol === 'https:' ? https : http;
+    const req = client.request(
+      {
+        hostname: base.hostname,
+        port: base.port || undefined,
+        path: base.pathname + base.search,
+        method: options.method || 'GET',
+        headers: options.headers,
+        rejectUnauthorized: false,
+      },
+      (res) => {
+        let data = '';
+        res.on('data', (chunk) => (data += chunk));
+        res.on('end', () => {
+          resolve({
+            ok: !!(res.statusCode && res.statusCode >= 200 && res.statusCode < 300),
+            status: res.statusCode || 0,
+            json: () => Promise.resolve(JSON.parse(data)),
+          });
+        });
+      }
+    );
+    req.on('error', reject);
+    if (options.body) req.write(options.body);
+    req.end();
+  });
+}
 
 export async function GET() {
   try {
@@ -13,7 +55,7 @@ export async function GET() {
     }
 
     // Fetch status from the multi-tenant daemon
-    const res = await fetch(`${DAEMON_URL}/status`, {
+    const res = await fetchDaemon('/status', {
       headers: {
         'X-User-Id': user.id
       }
@@ -25,20 +67,49 @@ export async function GET() {
     }
     
     const data = await res.json();
-    
-    // Update user's wacli status in the database
-    if (data.state) {
+
+    // Exhaustive state mapping from daemon → app
+    const daemonStatus = data.status || data.state || data.connection;
+    let appState: string;
+    if (data.connected === true || daemonStatus === 'CONNECTED' || daemonStatus === 'open') {
+      appState = 'CONNECTED';
+    } else if (daemonStatus === 'QR_READY') {
+      appState = 'QR_READY';
+    } else if (daemonStatus === 'connecting' || daemonStatus === 'waiting' || daemonStatus === 'INITIALIZING' || daemonStatus === 'STARTING' || daemonStatus === 'RECONNECTING') {
+      appState = 'CONNECTING';
+    } else {
+      appState = daemonStatus || 'DISCONNECTED';
+    }
+
+    // Only write to DB if state actually changed — prevents hammering the DB
+    // every 2 seconds while polling
+    const currentUser = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: { wacliStatus: true, wacliPhone: true }
+    });
+
+    const phone = data.phone || data.info?.pushName || null;
+    const stateChanged = currentUser?.wacliStatus !== appState;
+    const phoneChanged = currentUser?.wacliPhone !== phone;
+
+    if (stateChanged || phoneChanged) {
       await prisma.user.update({
         where: { id: user.id },
-        data: { 
-          wacliStatus: data.state,
-          wacliPhone: data.phone || null,
-          wacliLastConnectedAt: data.connected ? new Date() : null
+        data: {
+          wacliStatus: appState,
+          wacliPhone: phone,
+          ...(data.connected ? { wacliLastConnectedAt: new Date() } : {})
         }
       });
     }
-    
-    return NextResponse.json(data);
+
+    // Return unified shape to the client
+    return NextResponse.json({
+      connected: appState === 'CONNECTED',
+      state: appState,
+      phone: phone,
+      info: data.info || null
+    });
   } catch (error) {
     console.error('Error fetching wacli status:', error);
     // Fetch failed entirely — daemon is not reachable
