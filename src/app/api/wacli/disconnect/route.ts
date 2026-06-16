@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 import https from 'https';
 import http from 'http';
 
-const DAEMON_URL = process.env.WACLI_DAEMON_URL || 'http://84.8.221.131/wacli';
+const DAEMON_URL = process.env.WACLI_DAEMON_URL || 'http://84.8.221.131/wacli/';
 
 function fetchDaemon(
   path: string,
