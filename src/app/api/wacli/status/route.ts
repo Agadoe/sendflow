@@ -49,7 +49,9 @@ export async function GET() {
     }
 
     // Fetch status from the daemon (uses /health which returns { connection })
-    const res = await fetchDaemon('/health', {
+    console.log("DEBUG: DAEMON_URL =", DAEMON_URL);
+    const testUrl = new URL("/health", DAEMON_URL);
+    console.log("DEBUG: fetch URL =", testUrl.href);    const res = await fetchDaemon('/health', {
       headers: {
         'X-User-Id': user.id
       }
