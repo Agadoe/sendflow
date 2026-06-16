@@ -2,28 +2,42 @@
 import toast, { Toaster } from 'react-hot-toast';
 
 export default function ContactPage() {
+  const [submitting, setSubmitting] = useState(false);
+  const [sent, setSent] = useState(false);
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (submitting) return;
     const form = e.currentTarget;
     const data = new FormData(form);
+    setSubmitting(true);
+    setSent(false);
 
-    const res = await fetch('/api/contact', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: data.get('name'),
-        email: data.get('email'),
-        phone: data.get('phone'),
-        subject: data.get('subject'),
-        message: data.get('message'),
-      }),
-    });
+    try {
+      const res = await fetch('/api/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: data.get('name'),
+          email: data.get('email'),
+          phone: data.get('phone'),
+          subject: data.get('subject'),
+          message: data.get('message'),
+        }),
+      });
 
-    if (res.ok) {
-      toast.success('Message sent! We\'ll reply within 1 business day.');
-      form.reset();
-    } else {
-      toast.error('Failed to send. Try again or email us directly.');
+      if (res.ok) {
+        toast.success('Message sent! We\'ll reply within 1 business day.');
+        setSent(true);
+        form.reset();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || 'Failed to send. Try again or email us directly.');
+      }
+    } catch {
+      toast.error('Network error. Check your connection and try again.');
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -61,7 +75,7 @@ export default function ContactPage() {
               </svg>
             </div>
             <div className="text-xs text-slate-light uppercase tracking-wider font-semibold mb-1">Email</div>
-            <a href="mailto:sendflow@baahe.org" className="text-slate font-medium hover:text-amber transition-colors">sendflow@baahe.org</a>
+            <a href="mailto:sendflow@sendflow.baahe.org" className="text-slate font-medium hover:text-amber transition-colors">sendflow@sendflow.baahe.org</a>
             <div className="text-xs text-slate-light mt-1">Best for general enquiries &amp; billing</div>
           </div>
 
@@ -136,8 +150,24 @@ export default function ContactPage() {
               <label className="block text-sm font-medium text-slate mb-1.5">Message *</label>
               <textarea name="message" rows={5} placeholder="Tell us what's on your mind..." required className="w-full px-4 py-2.5 rounded-btn border border-gray-200 text-slate placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber/40 resize-none" />
             </div>
-            <button type="submit" className="w-full py-3 bg-amber hover:bg-amber-dark text-white font-semibold rounded-btn transition-colors">
-              Send Message
+            {sent && (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4 flex items-start gap-3">
+                <svg className="w-5 h-5 text-green-600 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div>
+                  <p className="text-sm font-medium text-green-800">Message sent successfully!</p>
+                  <p className="text-xs text-green-600 mt-0.5">We&apos;ll reply within 1 business day. Keep an eye on your inbox.</p>
+                </div>
+              </div>
+            )}
+            <button type="submit" disabled={submitting} className="w-full py-3 bg-amber hover:bg-amber-dark text-white font-semibold rounded-btn transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
+              {submitting ? (
+                <>
+                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Sending...
+                </>
+              ) : 'Send Message'}
             </button>
           </form>
         </div>

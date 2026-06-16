@@ -152,7 +152,11 @@ function LoginForm() {
 export default function LoginPage() {
   // useSearchParams() requires a Suspense boundary in Next.js
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={
+      <div className="min-h-screen bg-cream flex items-center justify-center">
+        <div className="w-12 h-12 border-4 border-amber border-t-transparent rounded-full animate-spin" />
+      </div>
+    }>
       <LoginForm />
     </Suspense>
   );

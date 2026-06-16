@@ -160,7 +160,7 @@ export default function HomePage() {
           </p>
 
           {!submitted ? (
-            <form onSubmit={handleWaitlist} className="max-w-md mx-auto flex flex-col gap-3 animate-fade-up" style={{ animationDelay: '240ms' }}>
+            <form id="waitlist-form" onSubmit={handleWaitlist} className="max-w-md mx-auto flex flex-col gap-3 animate-fade-up" style={{ animationDelay: '240ms' }}>
               <div className="flex flex-col sm:flex-row gap-3">
                 <input
                   type="text"
@@ -232,9 +232,9 @@ export default function HomePage() {
             </form>
           ) : (
             <div className="max-w-md mx-auto bg-surface rounded-card p-8 shadow-lg border border-amber/20 animate-fade-up">
-              <div className="text-4xl mb-3">🎉</div>
-              <h3 className="font-heading text-2xl text-slate mb-2">You&apos;re on the list!</h3>
-              <p className="text-slate-light">
+              <div className="text-5xl mb-4">🎉</div>
+              <h3 className="font-heading text-2xl text-slate mb-3">You&apos;re on the list!</h3>
+              <p className="text-slate-light mb-4">
                 We&apos;ll email <strong>{email}</strong> when we launch.<br />
                 Get 1 month free when we open doors.
               </p>
@@ -354,15 +354,15 @@ export default function HomePage() {
           </div>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {[
-              { title: 'Bulk Message Broadcast', desc: 'Send to 10 or 10,000 contacts with one click. No rate limiting headaches.', icon: '📨' },
-              { title: 'Drip Message Sequences', desc: 'Build multi-step campaigns that fire automatically over days or weeks. Tag-based triggers, delays, and follow-ups.', icon: '⏰' },
-              { title: 'Click-to-WhatsApp Ads', desc: 'Generate tracked links for Facebook, Instagram, and Google ads. See exactly which ad drives conversations.', icon: '🔗' },
-              { title: 'WhatsApp Lead Forms', desc: 'Embed native lead capture forms anywhere. Visitors answer questions and land straight in your WhatsApp chat.', icon: '📋' },
-              { title: 'Media Attachments', desc: 'Include images, PDFs, or documents. Perfect for catalogs, menus, or flyers.', icon: '🖼️' },
+              { title: 'Bulk Message Broadcast', desc: 'Send to 10 or 10,000 contacts with one click. Human-like delays between messages mimic natural typing to protect your WhatsApp number.', icon: '📨' },
+              { title: 'Drip Message Sequences', desc: 'Build multi-step campaigns that fire automatically over days or weeks. E.g.: Day 1 welcome → Day 3 reminder → Day 7 offer. Tag-based triggers and smart delays included.', icon: '⏰' },
+              { title: 'Click-to-WhatsApp Ads', desc: 'Generate tracked wa.me links for Facebook, Instagram, and Google ads. Each link carries UTM parameters so you see exactly which ad drove each conversation in your dashboard.', icon: '🔗' },
+              { title: 'WhatsApp Lead Forms', desc: 'Embed native lead capture forms on your website or landing pages. Visitors fill their details and land straight in your WhatsApp chat — no friction, no lost leads.', icon: '📋' },
+              { title: 'Media Attachments', desc: 'Attach images, PDFs, videos, or documents to any campaign. Perfect for product catalogs, restaurant menus, price lists, or promotional flyers.', icon: '🖼️' },
               { title: 'Delivery Reports', desc: 'See exactly who received your message, who opened it, and who didn\'t — per campaign and overall.', icon: '📊' },
-              { title: 'Contact Segmentation', desc: 'Tag contacts and filter by behavior. Send the right message to the right group every time.', icon: '🏷️' },
-              { title: 'Recurring Campaigns', desc: 'Set it once — daily, weekly, or monthly. Your campaign re-sends automatically on schedule.', icon: '🔄' },
-              { title: 'Team Roles & Access', desc: 'Invite editors and viewers. Control who can send, edit, or just view reports.', icon: '👥' },
+              { title: 'Contact Segmentation', desc: 'Tag contacts by behavior, location, or purchase history. Filter and send hyper-targeted messages. Never blast everyone with the same generic text.', icon: '🏷️' },
+              { title: 'Recurring Campaigns', desc: 'Set a campaign once — daily, weekly, or monthly. It re-sends automatically on schedule with updated contact lists. Ideal for recurring promotions.', icon: '🔄' },
+              { title: 'Team Roles & Access', desc: 'Invite up to 99 team members. Admins manage billing. Editors create and send campaigns. Viewers read reports only. Full audit trail of who sent what.', icon: '👥' },
             ].map(({ title, desc, icon }) => (
               <div key={title} className="p-6 bg-cream rounded-card border border-amber/5 hover:shadow-md transition-shadow">
                 <div className="text-3xl mb-3">{icon}</div>
@@ -413,7 +413,7 @@ export default function HomePage() {
                   )}
                   <div className={`text-lg font-heading text-slate mb-1`}>{plan.name}</div>
                   <div className="flex items-baseline gap-1 mb-1">
-                    <span className="font-heading text-4xl text-slate">GHS {plan.price.toLocaleString()}</span>
+                    <span className="font-heading text-4xl text-slate">GHS {price.toLocaleString()}</span>
                     {plan.price > 0 && <span className="text-slate-light text-sm">{period}</span>}
                   </div>
                   {billing === 'annual' && plan.price > 0 && (
@@ -471,7 +471,7 @@ export default function HomePage() {
         <div className="max-w-2xl mx-auto">
           <h2 className="font-heading text-4xl mb-4">Ready to reach your customers?</h2>
           <p className="text-gray-400 mb-8">Join 200+ African businesses already on the waitlist. Get 1 month free at launch.</p>
-          <a href="#waitlist-top" className="inline-block bg-amber hover:bg-amber-dark text-white font-semibold px-8 py-4 rounded-btn text-lg transition-all">
+          <a href="#waitlist-form" className="inline-block bg-amber hover:bg-amber-dark text-white font-semibold px-8 py-4 rounded-btn text-lg transition-all">
             Join the Waitlist — Free
           </a>
         </div>
@@ -505,7 +505,7 @@ function FAQItem({ q, a }: { q: string; a: string }) {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
       </button>
-      {open && <div className="px-5 pb-4 text-sm text-slate-light leading-relaxed border-t border-gray-100 pt-3">{a}</div>}
+      <div className={`px-5 pb-4 text-sm text-slate-light leading-relaxed border-t border-gray-100 pt-3 transition-all duration-200 ${open ? 'block opacity-100' : 'hidden opacity-0'}`}>{a}</div>
     </div>
   );
 }

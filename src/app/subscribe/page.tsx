@@ -28,9 +28,14 @@ function SubscribeContent() {
   }, [params]);
 
   async function fetchPlans() {
-    const res = await fetch('/api/paystack/plans');
-    const data = await res.json();
-    setPlans(data.plans || []);
+    try {
+      const res = await fetch('/api/paystack/plans');
+      const data = await res.json();
+      setPlans(data.plans || []);
+    } catch {
+      // Graceful fallback if API is down — show nothing instead of crashing
+      setPlans([]);
+    }
   }
 
   async function fetchUser() {
