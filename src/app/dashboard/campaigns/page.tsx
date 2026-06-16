@@ -9,6 +9,7 @@ export default function CampaignsPage() {
   const [form, setForm] = useState({ name: '', content: '', scheduledAt: '', recurrence: '' });
   const [creating, setCreating] = useState(false);
   const [sendingCampaign, setSendingCampaign] = useState<string | null>(null);
+  const [sendProgress, setSendProgress] = useState<Record<string, { sent: number; total: number }>>({});
   const [contactIds, setContactIds] = useState<string[]>([]);
 
   useEffect(() => {
@@ -42,28 +43,64 @@ export default function CampaignsPage() {
 
   async function handleSend(campaignId: string) {
     setSendingCampaign(campaignId);
-    toast.loading('Sending messages... this may take a while', { id: 'sending' });
-    try {
-      const res = await fetch('/api/campaigns/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ campaignId }),
-      });
-      const data = await res.json();
-      toast.dismiss('sending');
-      if (res.ok) {
-        toast.success(`Sent: ${data.sent}/${data.total} messages delivered`);
-        // Refresh campaigns
-        const updated = await fetch('/api/campaigns').then(r => r.json());
-        setCampaigns(updated.campaigns || []);
-      } else {
-        toast.error(data.error || 'Send failed');
+    toast.loading('Sending messages…', { id: `sending-${campaignId}` });
+
+    let done = false;
+    let attempts = 0;
+    const maxAttempts = 200; // safety net (~15-20 min at 5s intervals)
+
+    while (!done && attempts < maxAttempts) {
+      attempts++;
+      try {
+        const res = await fetch('/api/campaigns/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ campaignId, batchSize: 3 }),
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          toast.dismiss(`sending-${campaignId}`);
+          toast.error(data.error || 'Send failed');
+          setSendingCampaign(null);
+          return;
+        }
+
+        setSendProgress(prev => ({
+          ...prev,
+          [campaignId]: { sent: data.total - data.remaining, total: data.total }
+        }));
+
+        // Update toast with progress
+        toast.loading(
+          `Sending… ${data.total - data.remaining}/${data.total} messages`,
+          { id: `sending-${campaignId}` }
+        );
+
+        if (data.done) {
+          done = true;
+          toast.dismiss(`sending-${campaignId}`);
+          toast.success(`Campaign sent! ${data.sent} delivered, ${data.failed || 0} failed, ${data.skipped || 0} skipped.`);
+          // Refresh campaigns
+          const updated = await fetch('/api/campaigns').then(r => r.json());
+          setCampaigns(updated.campaigns || []);
+        } else {
+          // Wait 5–8 seconds before next batch (keeps request short, avoids timeout)
+          const pause = 5000 + Math.floor(Math.random() * 3000);
+          await new Promise(r => setTimeout(r, pause));
+        }
+      } catch {
+        toast.dismiss(`sending-${campaignId}`);
+        toast.error('Network error — campaign may still be sending in background. Refresh to check status.');
+        setSendingCampaign(null);
+        return;
       }
-    } catch {
-      toast.dismiss('sending');
-      toast.error('Network error');
-    } finally {
-      setSendingCampaign(null);
+    }
+
+    setSendingCampaign(null);
+    if (!done) {
+      toast.dismiss(`sending-${campaignId}`);
+      toast('Campaign send reached max attempts. Check campaigns page for final status.', { icon: '⏱️' });
     }
   }
 
@@ -114,65 +151,80 @@ export default function CampaignsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {campaigns.map((c: any) => (
-                <tr key={c.id} className="hover:bg-gray-50/50 transition-colors">
-                  <td className="px-6 py-4">
-                    <div className="font-medium text-slate text-sm">{c.name}</div>
-                    <div className="text-xs text-slate-light mt-0.5 truncate max-w-xs">{c.content}</div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusColor(c.status)}`}>{c.status}</span>
-                  </td>
-                  <td className="px-6 py-4 text-sm text-slate">{c._count?.messages || 0}</td>
-                  <td className="px-6 py-4 text-xs text-slate-light">{new Date(c.createdAt).toLocaleDateString()}</td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
-                      {c.status === 'DRAFT' && (
+              {campaigns.map((c: any) => {
+                const progress = sendProgress[c.id];
+                const isSending = sendingCampaign === c.id;
+                return (
+                  <tr key={c.id} className="hover:bg-gray-50/50 transition-colors">
+                    <td className="px-6 py-4">
+                      <div className="font-medium text-slate text-sm">{c.name}</div>
+                      <div className="text-xs text-slate-light mt-0.5 truncate max-w-xs">{c.content}</div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusColor(c.status)}`}>{c.status}</span>
+                      {isSending && progress && (
+                        <div className="mt-1.5 w-32 bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                          <div
+                            className="bg-amber h-1.5 rounded-full transition-all duration-300"
+                            style={{ width: `${Math.round((progress.sent / progress.total) * 100)}%` }}
+                          />
+                        </div>
+                      )}
+                      {isSending && progress && (
+                        <div className="text-[10px] text-slate-light mt-0.5">{progress.sent}/{progress.total}</div>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-slate">{c._count?.messages || 0}</td>
+                    <td className="px-6 py-4 text-xs text-slate-light">{new Date(c.createdAt).toLocaleDateString()}</td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        {c.status === 'DRAFT' && (
+                          <button
+                            onClick={() => handleSend(c.id)}
+                            disabled={isSending}
+                            className="flex items-center gap-1.5 text-sm bg-green-500 hover:bg-green-600 text-white px-3 py-1.5 rounded-btn font-medium transition-colors disabled:opacity-60"
+                          >
+                            {isSending ? (
+                              <>
+                                <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                Sending…
+                              </>
+                            ) : (
+                              <>
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                                </svg>
+                                Send
+                              </>
+                            )}
+                          </button>
+                        )}
                         <button
-                          onClick={() => handleSend(c.id)}
-                          disabled={sendingCampaign === c.id}
-                          className="flex items-center gap-1.5 text-sm bg-green-500 hover:bg-green-600 text-white px-3 py-1.5 rounded-btn font-medium transition-colors disabled:opacity-60"
+                          onClick={async () => {
+                            const res = await fetch(`/api/campaigns/${c.id}/duplicate`, { method: 'POST' });
+                            const data = await res.json();
+                            if (res.ok) {
+                              setCampaigns([data.campaign, ...campaigns]);
+                              toast.success('Campaign duplicated!');
+                            } else {
+                              toast.error(data.error || 'Failed to duplicate');
+                            }
+                          }}
+                          className="flex items-center gap-1.5 text-sm text-slate-light hover:text-slate px-2 py-1.5 rounded-btn hover:bg-gray-100 transition-colors"
+                          title="Duplicate"
                         >
-                          {sendingCampaign === c.id ? (
-                            <>
-                              <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                              Sending...
-                            </>
-                          ) : (
-                            <>
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                              </svg>
-                              Send
-                            </>
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                          </svg>
+                          {c.status === 'SENT' && (
+                            <span className="text-xs text-green-600 font-medium">✓ Sent</span>
                           )}
                         </button>
-                      )}
-                      <button
-                        onClick={async () => {
-                          const res = await fetch(`/api/campaigns/${c.id}/duplicate`, { method: 'POST' });
-                          const data = await res.json();
-                          if (res.ok) {
-                            setCampaigns([data.campaign, ...campaigns]);
-                            toast.success('Campaign duplicated!');
-                          } else {
-                            toast.error(data.error || 'Failed to duplicate');
-                          }
-                        }}
-                        className="flex items-center gap-1.5 text-sm text-slate-light hover:text-slate px-2 py-1.5 rounded-btn hover:bg-gray-100 transition-colors"
-                        title="Duplicate"
-                      >
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                        </svg>
-                        {c.status === 'SENT' && (
-                          <span className="text-xs text-green-600 font-medium">✓ Sent</span>
-                        )}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

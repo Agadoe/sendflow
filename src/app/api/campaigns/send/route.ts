@@ -8,14 +8,13 @@ const DAEMON_URL = process.env.WACLI_DAEMON_URL || 'http://84.8.221.131';
 
 // ─── In-Memory Rate Limit (resets on cold start; use Redis in production) ───
 const rateMap = new Map<string, { count: number; minuteReset: number; dayReset: number }>();
-const MAX_PER_MINUTE = 20;  // conservative for Baileys
-const MAX_PER_DAY = 300;    // conservative daily cap
+const MAX_PER_MINUTE = 20;
+const MAX_PER_DAY = 300;
 
 function checkRateLimit(userId: string): { ok: boolean; retryAfter?: number; reason?: string } {
   const now = Date.now();
   const entry = rateMap.get(userId) || { count: 0, minuteReset: now + 60_000, dayReset: now + 86_400_000 };
 
-  // Reset windows
   if (now > entry.minuteReset) {
     entry.count = 0;
     entry.minuteReset = now + 60_000;
@@ -30,7 +29,6 @@ function checkRateLimit(userId: string): { ok: boolean; retryAfter?: number; rea
     return { ok: false, retryAfter: seconds, reason: `Daily limit of ${MAX_PER_DAY} messages reached.` };
   }
 
-  // Per-minute bucket
   const minuteKey = `${userId}:${Math.floor(now / 60_000)}`;
   const minuteEntry = rateMap.get(minuteKey) || { count: 0, resetAt: now + 60_000 };
   if (now > minuteEntry.resetAt) {
@@ -49,7 +47,7 @@ function checkRateLimit(userId: string): { ok: boolean; retryAfter?: number; rea
   return { ok: true };
 }
 
-// ─── Native fetch for daemon (handles bare IPs with self-signed certs) ───
+// ─── Native fetch for daemon ────────────────────────────────────────────────
 function fetchDaemon(
   path: string,
   options: { method?: string; headers?: http.OutgoingHttpHeaders; body?: string } = {}
@@ -96,7 +94,7 @@ function isBusinessHours(timezone: string): boolean {
   try {
     const now = new Date().toLocaleString('en-US', { timeZone: timezone, hour12: false });
     const hour = parseInt(now.split(',')[1].trim().split(':')[0], 10);
-    return hour >= 8 && hour < 20; // 8am – 8pm
+    return hour >= 8 && hour < 20;
   } catch {
     return true;
   }
@@ -104,7 +102,6 @@ function isBusinessHours(timezone: string): boolean {
 
 function personalize(content: string, name?: string | null): string {
   let msg = content.replace(/\{\{name\}\}/gi, name || 'there');
-  // Spin-text: replace common patterns with slight variations
   const spins = [
     { pattern: /Hi,/gi, variants: ['Hi,', 'Hey,', 'Hello,'] },
     { pattern: /hope you/gi, variants: ['hope you', 'hope that you'] },
@@ -130,23 +127,10 @@ function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-// ─── Human-like delay generator ───────────────────────────────────────────
-// Simulates a real person: quick bursts, then longer pauses, random variation
 function getHumanDelay(index: number): number {
-  // Base: 4–12 seconds between messages
   const base = 4000 + Math.floor(Math.random() * 8000);
-
-  // Every 5th message, take a longer "break" (15–35s) like a real person
-  if (index > 0 && index % 5 === 0) {
-    return 15000 + Math.floor(Math.random() * 20000);
-  }
-
-  // Every 10th message, an even longer pause (30–60s)
-  if (index > 0 && index % 10 === 0) {
-    return 30000 + Math.floor(Math.random() * 30000);
-  }
-
-  // Slight typing-speed variation based on message length
+  if (index > 0 && index % 5 === 0) return 15000 + Math.floor(Math.random() * 20000);
+  if (index > 0 && index % 10 === 0) return 30000 + Math.floor(Math.random() * 30000);
   return base;
 }
 
@@ -172,7 +156,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { campaignId } = await req.json();
+  const body = await req.json();
+  const { campaignId } = body;
+  const batchSize = Math.min(parseInt(body.batchSize || '3', 10), 5); // max 5 per batch
+
   if (!campaignId) {
     return NextResponse.json({ error: 'campaignId required' }, { status: 400 });
   }
@@ -194,12 +181,14 @@ export async function POST(req: Request) {
     );
   }
 
+  // Mark SENDING if this is the first batch (campaign status is DRAFT or SCHEDULED)
   const campaign = await prisma.campaign.findUnique({
     where: { id: campaignId, userId: user.id },
     include: {
       messages: {
         include: { contact: true },
         where: { status: 'PENDING' },
+        take: batchSize,
       },
     },
   });
@@ -208,51 +197,45 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Campaign not found' }, { status: 404 });
   }
 
-  await prisma.campaign.update({
-    where: { id: campaignId },
-    data: { status: 'SENDING', sentAt: new Date() },
-  });
+  // If first batch, mark campaign as SENDING
+  if (campaign.status === 'DRAFT' || campaign.status === 'SCHEDULED') {
+    await prisma.campaign.update({
+      where: { id: campaignId },
+      data: { status: 'SENDING', sentAt: new Date() },
+    });
+  }
 
   let sent = 0;
   let failed = 0;
   let skipped = 0;
-  const results: { contactId: string; status: string; reason?: string }[] = [];
 
   for (let i = 0; i < campaign.messages.length; i++) {
     const msg = campaign.messages[i];
     const contact = msg.contact;
     const baseContent = campaign.content;
 
-    // 1. Opt-in guard
     if (!contact.optedIn) {
       await prisma.message.update({
         where: { id: msg.id },
         data: { status: 'SKIPPED', failureReason: 'Contact has not opted in to WhatsApp messages' },
       });
       skipped++;
-      results.push({ contactId: contact.id, status: 'SKIPPED', reason: 'Not opted in' });
       continue;
     }
 
-    // 2. Duplicate guard (same content within 7 days)
     if (isDuplicate(contact, baseContent)) {
       await prisma.message.update({
         where: { id: msg.id },
         data: { status: 'SKIPPED', failureReason: 'Duplicate message sent within 7 days' },
       });
       skipped++;
-      results.push({ contactId: contact.id, status: 'SKIPPED', reason: 'Duplicate within 7 days' });
       continue;
     }
 
-    // 3. Personalize & vary
     const personalized = personalize(baseContent, contact.name);
-
-    // 4. Human-like delay between sends
     const delay = getHumanDelay(i);
     await sleep(delay);
 
-    // 5. Re-check rate limit mid-loop
     const midCheck = checkRateLimit(user.id);
     if (!midCheck.ok) {
       await prisma.message.updateMany({
@@ -274,40 +257,38 @@ export async function POST(req: Request) {
         data: { lastMessageContent: personalized, lastMessageSentAt: new Date() },
       });
       sent++;
-      results.push({ contactId: contact.id, status: 'SENT' });
     } catch (e: any) {
       await prisma.message.update({
         where: { id: msg.id },
         data: { status: 'FAILED', failureReason: e.message },
       });
       failed++;
-      results.push({ contactId: contact.id, status: 'FAILED', reason: e.message });
     }
   }
 
-  // Mark remaining PENDING as FAILED if loop ended early
+  // Count remaining pending
   const remainingPending = await prisma.message.count({
     where: { campaignId, status: 'PENDING' },
   });
-  if (remainingPending > 0) {
-    await prisma.message.updateMany({
-      where: { campaignId, status: 'PENDING' },
-      data: { status: 'FAILED', failureReason: 'Campaign ended before send (rate limit or error)' },
-    });
-    failed += remainingPending;
-  }
 
-  const finalStatus = sent > 0 ? 'SENT' : failed > 0 ? 'FAILED' : 'DRAFT';
-  await prisma.campaign.update({
-    where: { id: campaignId },
-    data: { status: finalStatus },
-  });
+  // If nothing remaining, mark final status
+  if (remainingPending === 0) {
+    const totalMessages = await prisma.message.count({ where: { campaignId } });
+    const sentCount = await prisma.message.count({ where: { campaignId, status: 'SENT' } });
+    const finalStatus = sentCount > 0 ? 'SENT' : 'FAILED';
+    await prisma.campaign.update({
+      where: { id: campaignId },
+      data: { status: finalStatus },
+    });
+  }
 
   return NextResponse.json({
     sent,
     failed,
     skipped,
-    total: campaign.messages.length,
-    results,
+    processed: sent + failed + skipped,
+    remaining: remainingPending,
+    total: await prisma.message.count({ where: { campaignId } }),
+    done: remainingPending === 0,
   });
 }
