@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { requirePlan, checkCampaignLimit, PLANS, type PlanCode } from '@/lib/plans';
+import { checkCampaignLimit, PLANS, type PlanCode } from '@/lib/plans';
 import { getSession } from '@/lib/auth';
 import { NextRequest } from 'next/server';
 
@@ -41,15 +41,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Name and content required' }, { status: 400 });
   }
 
-  // Enforce plan: bulkSend capability
-  try {
-    console.log('[DEBUG] Session plan:', session.plan, 'PLANS.FREE.bulkSend:', PLANS.FREE.bulkSend);
-    requirePlan(session.plan, 'bulkSend', 'Creating campaigns with bulk send requires a paid plan.');
-  } catch (e: any) {
-    console.log('[DEBUG] requirePlan threw:', e.message);
-    return NextResponse.json({ error: e.message }, { status: e.status });
-  }
-
   // Enforce monthly campaign limit
   const canCreate = await checkCampaignLimit(userId, prisma);
   if (!canCreate) {
@@ -83,15 +74,4 @@ export async function POST(req: Request) {
   }
 
   return NextResponse.json({ campaign }, { status: 201 });
-}
-// DEBUG endpoint to inspect deployed PLANS at runtime
-export async function PUT(req: Request) {
-  const request = req as NextRequest;
-  const session = await getSession(request);
-  return NextResponse.json({
-    userPlan: session?.plan || null,
-    freePlanBulkSend: PLANS.FREE.bulkSend,
-    freePlanKeys: Object.keys(PLANS.FREE),
-    plansTsHash: 'deployed_' + Date.now(),
-  });
 }
