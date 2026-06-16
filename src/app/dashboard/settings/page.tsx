@@ -19,8 +19,18 @@ export default function SettingsPage() {
   const [inviting, setInviting] = useState(false);
   const [isOwner, setIsOwner] = useState(false);
 
+  // API Keys state
+  const [apiKeys, setApiKeys] = useState<any[]>([]);
+  const [keysLoading, setKeysLoading] = useState(false);
+  const [showKeyModal, setShowKeyModal] = useState(false);
+  const [newKeyName, setNewKeyName] = useState('');
+  const [generatingKey, setGeneratingKey] = useState(false);
+  const [generatedKey, setGeneratedKey] = useState<string | null>(null);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
   useEffect(() => {
     if (activeTab === 'team') loadTeam();
+    if (activeTab === 'apikeys') loadKeys();
   }, [activeTab]);
 
   async function loadTeam() {
@@ -86,6 +96,52 @@ export default function SettingsPage() {
     if (role === 'EDITOR') return 'bg-blue-50 text-blue-600';
     return 'bg-gray-100 text-slate-light';
   };
+
+  // API Keys functions
+  async function loadKeys() {
+    setKeysLoading(true);
+    try {
+      const res = await fetch('/api/keys');
+      const data = await res.json();
+      if (res.ok) setApiKeys(data.keys || []);
+    } catch {} finally { setKeysLoading(false); }
+  }
+
+  async function handleCreateKey(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newKeyName) return;
+    setGeneratingKey(true);
+    try {
+      const res = await fetch('/api/keys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newKeyName }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setGeneratedKey(data.key);
+        setApiKeys([{ id: data.id, key: data.key, createdAt: data.createdAt, name: newKeyName }, ...apiKeys]);
+        setNewKeyName('');
+      } else {
+        toast.error(data.error || 'Failed to create key');
+      }
+    } finally { setGeneratingKey(false); }
+  }
+
+  async function handleDeleteKey(id: string) {
+    if (!confirm('Delete this API key? Any integrations using it will stop working.')) return;
+    const res = await fetch(`/api/keys?id=${id}`, { method: 'DELETE' });
+    if (res.ok) {
+      setApiKeys(apiKeys.filter(k => k.id !== id));
+      toast.success('API key deleted');
+    }
+  }
+
+  function copyKey(key: string) {
+    navigator.clipboard.writeText(key).catch(() => {});
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey(null), 2000);
+  }
 
   async function loadLinks() {
     try {
@@ -157,7 +213,7 @@ export default function SettingsPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 bg-gray-100 rounded-btn p-1 w-fit">
-        {['links', 'team'].map(tab => (
+        {['links', 'team', 'apikeys'].map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -165,7 +221,7 @@ export default function SettingsPage() {
               activeTab === tab ? 'bg-white text-slate shadow-sm' : 'text-slate-light hover:text-slate'
             }`}
           >
-            {tab === 'links' ? 'Click-to-WhatsApp' : 'Team Members'}
+            {tab === 'links' ? 'Click-to-WhatsApp' : tab === 'team' ? 'Team Members' : 'API Keys'}
           </button>
         ))}
       </div>
@@ -416,6 +472,116 @@ export default function SettingsPage() {
           </div>
         </div>
       )}
+      {/* API Keys Tab */}
+      {activeTab === 'apikeys' && (
+        <div className="space-y-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="font-heading text-lg text-slate">API Keys</h2>
+              <p className="text-xs text-slate-light mt-0.5">Use these keys to connect n8n, Zapier, or custom scripts to SendFlow</p>
+            </div>
+            <button
+              onClick={() => { setShowKeyModal(true); setGeneratedKey(null); }}
+              className="flex items-center gap-2 bg-amber hover:bg-amber-dark text-white text-sm font-semibold px-4 py-2.5 rounded-btn transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Generate Key
+            </button>
+          </div>
+
+          <div className="bg-amber/10 border border-amber/20 rounded-lg px-4 py-3 text-sm text-amber">
+            <strong>Heads up:</strong> Contacts pushed via API start as <strong>cold leads</strong> (opted out). You must get explicit consent before messaging them on WhatsApp.
+          </div>
+
+          {keysLoading ? (
+            <div className="text-center py-12 text-slate-light">Loading...</div>
+          ) : apiKeys.length === 0 ? (
+            <div className="bg-surface rounded-card border border-gray-100 p-12 text-center">
+              <div className="text-4xl mb-3">🔑</div>
+              <h3 className="font-heading text-xl text-slate mb-2">No API keys yet</h3>
+              <p className="text-slate-light mb-6">Generate your first key to connect n8n lead discovery.</p>
+              <button onClick={() => { setShowKeyModal(true); setGeneratedKey(null); }} className="bg-amber hover:bg-amber-dark text-white font-semibold px-6 py-3 rounded-btn transition-colors">
+                Generate First Key
+              </button>
+            </div>
+          ) : (
+            <div className="bg-surface rounded-card border border-gray-100 overflow-hidden">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-100 bg-gray-50/50">
+                    <th className="text-left px-6 py-3 text-xs font-semibold text-slate-light uppercase tracking-wider">Name</th>
+                    <th className="text-left px-6 py-3 text-xs font-semibold text-slate-light uppercase tracking-wider">Key</th>
+                    <th className="text-left px-6 py-3 text-xs font-semibold text-slate-light uppercase tracking-wider">Created</th>
+                    <th className="text-left px-6 py-3 text-xs font-semibold text-slate-light uppercase tracking-wider">Last Used</th>
+                    <th className="px-6 py-3" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {apiKeys.map((k: any) => (
+                    <tr key={k.id} className="hover:bg-gray-50/50">
+                      <td className="px-6 py-4 font-medium text-slate">{k.name || 'API Key'}</td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+                          <code className="text-xs bg-gray-50 text-slate-light px-2 py-1 rounded border border-gray-100 font-mono">{k.key?.slice(0, 12)}...{k.key?.slice(-4)}</code>
+                          <button
+                            onClick={() => copyKey(k.key)}
+                            className="text-slate-light hover:text-slate transition-colors"
+                            title="Copy full key"
+                          >
+                            {copiedKey === k.key ? (
+                              <svg className="w-4 h-4 text-green" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              </svg>
+                            ) : (
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                              </svg>
+                            )}
+                          </button>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-slate-light">{k.createdAt ? new Date(k.createdAt).toLocaleDateString() : '-'}</td>
+                      <td className="px-6 py-4 text-sm text-slate-light">{k.lastUsed ? new Date(k.lastUsed).toLocaleDateString() : 'Never'}</td>
+                      <td className="px-6 py-4">
+                        <button
+                          onClick={() => handleDeleteKey(k.id)}
+                          className="text-slate-light hover:text-red-500 transition-colors"
+                          title="Delete"
+                        >
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <div className="bg-gray-50 rounded-card border border-gray-100 p-4">
+            <h4 className="text-xs font-semibold text-slate-light uppercase tracking-wider mb-3">Integration Guide</h4>
+            <div className="space-y-3 text-sm text-slate-light">
+              <div className="bg-white rounded-lg p-3 border border-gray-100">
+                <div className="font-semibold text-slate mb-1">n8n Webhook URL</div>
+                <code className="text-xs bg-gray-50 px-2 py-1 rounded font-mono text-amber">https://sendflow-two.vercel.app/api/webhooks/n8n/leads</code>
+              </div>
+              <div className="bg-white rounded-lg p-3 border border-gray-100">
+                <div className="font-semibold text-slate mb-1">Headers</div>
+                <code className="text-xs bg-gray-50 px-2 py-1 rounded font-mono text-amber">X-Sendflow-Key: sf_your_key_here</code>
+              </div>
+              <div className="bg-white rounded-lg p-3 border border-gray-100">
+                <div className="font-semibold text-slate mb-1">Payload</div>
+                <pre className="text-xs bg-gray-50 px-2 py-1 rounded font-mono overflow-x-auto">{JSON.stringify({ leads: [{ phone: '0241234567', name: 'Business Name', industry: 'logistics' }] }, null, 2)}</pre>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Invite Modal */}
       {showInviteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
@@ -449,6 +615,64 @@ export default function SettingsPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Create API Key Modal */}
+      {showKeyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-surface rounded-card w-full max-w-lg shadow-2xl">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <h3 className="font-heading text-xl text-slate">Generate API Key</h3>
+              <button onClick={() => { setShowKeyModal(false); setGeneratedKey(null); }} className="text-slate-light hover:text-slate transition-colors">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            {!generatedKey ? (
+              <form onSubmit={handleCreateKey} className="p-6 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate mb-1.5">Key Name *</label>
+                  <input type="text" placeholder="e.g. n8n Lead Discovery" value={newKeyName} onChange={e => setNewKeyName(e.target.value)} className="w-full px-4 py-2.5 rounded-btn border border-gray-200 text-slate placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber/40" required />
+                </div>
+                <div className="flex gap-3 pt-2">
+                  <button type="button" onClick={() => setShowKeyModal(false)} className="flex-1 py-2.5 rounded-btn bg-gray-100 hover:bg-gray-200 text-slate font-medium transition-colors">Cancel</button>
+                  <button type="submit" disabled={generatingKey} className="flex-1 py-2.5 rounded-btn bg-amber hover:bg-amber-dark text-white font-semibold transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
+                    {generatingKey ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : null}
+                    {generatingKey ? 'Generating...' : 'Generate Key'}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div className="p-6 space-y-4">
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <svg className="w-5 h-5 text-green" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span className="font-semibold text-green">Key generated successfully!</span>
+                  </div>
+                  <p className="text-sm text-green-700 mb-3">Copy it now — you won't be able to see it again.</p>
+                  <div className="flex items-center gap-2 bg-white rounded-lg border border-green-200 p-3">
+                    <code className="text-sm font-mono text-slate flex-1 break-all">{generatedKey}</code>
+                    <button
+                      onClick={() => copyKey(generatedKey)}
+                      className="shrink-0 text-green hover:text-green-700 transition-colors"
+                    >
+                      {copiedKey === generatedKey ? 'Copied!' : 'Copy'}
+                    </button>
+                  </div>
+                </div>
+                <button
+                  onClick={() => { setShowKeyModal(false); setGeneratedKey(null); }}
+                  className="w-full py-2.5 rounded-btn bg-gray-100 hover:bg-gray-200 text-slate font-medium transition-colors"
+                >
+                  Done
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -194,6 +194,7 @@ model WaitlistSubmission {
 model ApiKey {
   id        String    @id @default(cuid())
   userId    String
+  name      String    @default("API Key")
   key       String    @unique
   lastUsed  DateTime?
   createdAt DateTime  @default(now())
