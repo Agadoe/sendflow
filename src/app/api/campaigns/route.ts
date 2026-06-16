@@ -84,3 +84,14 @@ export async function POST(req: Request) {
 
   return NextResponse.json({ campaign }, { status: 201 });
 }
+// DEBUG endpoint to inspect deployed PLANS at runtime
+export async function PUT(req: Request) {
+  const request = req as NextRequest;
+  const session = await getSession(request);
+  return NextResponse.json({
+    userPlan: session?.plan || null,
+    freePlanBulkSend: PLANS.FREE.bulkSend,
+    freePlanKeys: Object.keys(PLANS.FREE),
+    plansTsHash: 'deployed_' + Date.now(),
+  });
+}
