@@ -43,8 +43,10 @@ export async function POST(req: Request) {
 
   // Enforce plan: bulkSend capability
   try {
+    console.log('[DEBUG] Session plan:', session.plan, 'PLANS.FREE.bulkSend:', PLANS.FREE.bulkSend);
     requirePlan(session.plan, 'bulkSend', 'Creating campaigns with bulk send requires a paid plan.');
   } catch (e: any) {
+    console.log('[DEBUG] requirePlan threw:', e.message);
     return NextResponse.json({ error: e.message }, { status: e.status });
   }
 
