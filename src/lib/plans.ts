@@ -21,8 +21,8 @@ export interface PlanLimits {
 export const PLANS: Record<PlanCode, PlanLimits> = {
   FREE: {
     maxContacts: 100,
-    maxCampaignsPerMonth: 0,
-    bulkSend: false,
+    maxCampaignsPerMonth: 10,
+    bulkSend: true,
     maxTeamMembers: 1,
     maxForms: 1,
     apiKeyAccess: false,

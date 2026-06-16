@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import toast from 'react-hot-toast';
+import toast, { Toaster } from 'react-hot-toast';
 
 export default function CampaignsPage() {
   const [campaigns, setCampaigns] = useState<any[]>([]);
@@ -177,6 +177,8 @@ export default function CampaignsPage() {
           </table>
         </div>
       )}
+
+      <Toaster position="top-right" />
 
       {/* Create modal */}
       {showModal && (
