@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import toast, { Toaster } from 'react-hot-toast';
 
 const businessTypes = [
@@ -25,6 +25,16 @@ export default function HomePage() {
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [billing, setBilling] = useState<'monthly' | 'annual'>('monthly');
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then(r => r.json())
+      .then(d => {
+        if (d.user) setIsLoggedIn(true);
+      })
+      .catch(() => {});
+  }, []);
 
   async function handleWaitlist(e: React.FormEvent) {
     e.preventDefault();
@@ -118,9 +128,18 @@ export default function HomePage() {
           <a href="/#pricing" className="text-sm font-medium text-slate hover:text-amber transition-colors">
             View Pricing
           </a>
-          <a href="/login" className="text-sm font-semibold text-amber hover:text-amber-dark transition-colors">
-            Sign In
-          </a>
+          {isLoggedIn ? (
+            <a
+              href="/dashboard"
+              className="text-sm font-semibold text-white bg-amber hover:bg-amber-dark px-4 py-2 rounded-btn transition-colors"
+            >
+              Dashboard →
+            </a>
+          ) : (
+            <a href="/login" className="text-sm font-semibold text-amber hover:text-amber-dark transition-colors">
+              Sign In
+            </a>
+          )}
         </div>
       </nav>
 
