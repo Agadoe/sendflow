@@ -12,6 +12,7 @@ export interface SessionUser {
   plan: string;
   role: 'ADMIN' | 'EDITOR' | 'VIEWER' | 'OWNER';
   isOwner: boolean;
+  timezone?: string | null;
 }
 
 function buildSession(user: {
@@ -21,6 +22,7 @@ function buildSession(user: {
   plan: string;
   isOwner: boolean;
   role?: string | null;
+  timezone?: string | null;
 }): SessionUser {
   const role = user.isOwner
     ? 'OWNER'
@@ -32,6 +34,7 @@ function buildSession(user: {
     plan: user.plan,
     role,
     isOwner: user.isOwner,
+    timezone: user.timezone,
   };
 }
 /**
@@ -111,7 +114,7 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, email: true, name: true, plan: true, isOwner: true, role: true },
+      select: { id: true, email: true, name: true, plan: true, isOwner: true, role: true, timezone: true },
     });
     if (!user) return null;
 

@@ -7,7 +7,7 @@ import http from 'http';
 const DAEMON_URL = process.env.WACLI_DAEMON_URL || 'http://84.8.221.131';
 
 // ─── In-Memory Rate Limit (resets on cold start; use Redis in production) ───
-const rateMap = new Map<string, { count: number; minuteReset: number; dayReset: number }>();
+const rateMap = new Map<string, any>();
 const MAX_PER_MINUTE = 20;
 const MAX_PER_DAY = 300;
 
