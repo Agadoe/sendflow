@@ -37,6 +37,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Reset token has expired. Request a new one.' }, { status: 401 });
     }
 
+    // Security: verify this is actually a forgot-password token, not an email-verification token.
+    if (!record.identifier.startsWith('forgot:')) {
+      return NextResponse.json({ error: 'Invalid reset token' }, { status: 401 });
+    }
+
     // Extract email from identifier (format: forgot:email@example.com)
     const email = record.identifier.replace(/^forgot:/, '');
     if (!email || !email.includes('@')) {
@@ -52,6 +57,22 @@ export async function POST(req: Request) {
 
     // Consume the token so it can't be reused.
     await prisma.verificationToken.delete({ where: { token } });
+
+    // Notify user that their password was changed
+    try {
+      const { sendMail } = await import('@/lib/email');
+      await sendMail({
+        to: email,
+        subject: 'Your SendFlow password was changed',
+        text: `Hi,\n\nYour SendFlow password was just changed. If this was you, you can ignore this email.\n\nIf you did not make this change, please contact support immediately.`,
+        html: `<p>Hi,</p>
+<p>Your SendFlow password was just changed. If this was you, you can ignore this email.</p>
+<p>If you did not make this change, please <strong>contact support immediately</strong>.</p>`,
+        testMode: false,
+      });
+    } catch {
+      // Best-effort notification; don't fail the reset if email fails
+    }
 
     return NextResponse.json(
       { message: 'Password updated. You can now sign in with your new password.' },

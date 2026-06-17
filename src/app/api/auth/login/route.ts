@@ -47,10 +47,12 @@ export async function POST(req: Request) {
     }
 
     // Block login until email is verified.
+    // NOTE: we return the same generic error as wrong-password to prevent
+    // attackers from confirming which emails have valid accounts.
     if (!user.emailVerified) {
       return NextResponse.json(
-        { error: 'Please verify your email before signing in.', needsVerification: true },
-        { status: 403 }
+        { error: 'Invalid credentials' },
+        { status: 401 }
       );
     }
 

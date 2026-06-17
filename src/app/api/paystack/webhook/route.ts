@@ -60,6 +60,7 @@ export async function POST(req: NextRequest) {
       }
 
       // Idempotent Payment row. unique(ref) protects against duplicate webhooks.
+      let paymentCreated = false;
       try {
         await prisma.payment.create({
           data: {
@@ -70,6 +71,7 @@ export async function POST(req: NextRequest) {
             ref,
           },
         });
+        paymentCreated = true;
       } catch (err) {
         // P2002 = unique constraint violation = already processed. Safe to no-op.
         const code = (err as any)?.code;
@@ -78,11 +80,13 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // Update the user's plan
-      await prisma.user.update({
-        where: { id: userId },
-        data: { plan: plan.code },
-      });
+      // Only update plan if this is the first time we see this payment
+      if (paymentCreated) {
+        await prisma.user.update({
+          where: { id: userId },
+          data: { plan: plan.code },
+        });
+      }
 
       console.log(`Paystack: user ${userId} upgraded to ${plan.code} (${email})`);
     }
