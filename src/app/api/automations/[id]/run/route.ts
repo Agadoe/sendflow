@@ -1,14 +1,12 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-
-function getUserId(req: Request): string | null {
-  const cookieHeader = req.headers.get('cookie');
-  return cookieHeader ? (cookieHeader.match(/sf_token=([^;]+)/)?.[1] ?? null) : null;
-}
+import { getSession } from '@/lib/auth';
+import { NextRequest } from 'next/server';
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const userId = getUserId(req);
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const session = await getSession(req as NextRequest);
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const userId = session.id;
 
   const { id } = await params;
   const automation = await prisma.automation.findFirst({ where: { id, userId } });

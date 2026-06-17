@@ -3,18 +3,6 @@ import { getSession, hasRole } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { randomBytes } from 'crypto';
 
-function getUserIdFromCookie(cookieHeader: string | null): string | null {
-  if (!cookieHeader) return null;
-  const match = cookieHeader.match(/sf_token=([^;]+)/);
-  if (!match) return null;
-  try {
-    const payload = JSON.parse(Buffer.from(match[1].split('.')[1], 'base64').toString());
-    return payload.sub || null;
-  } catch {
-    return null;
-  }
-}
-
 export async function GET(req: Request) {
   const session = await getSession(req as NextRequest);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

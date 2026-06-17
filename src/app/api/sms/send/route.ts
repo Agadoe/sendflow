@@ -1,24 +1,11 @@
-import { getJWTSecret } from '@/lib/jwt';
 import { NextResponse } from 'next/server';
-import { jwtVerify } from 'jose';
-
-
-async function getUserIdFromCookie(cookieHeader: string | null): Promise<string | null> {
-  if (!cookieHeader) return null;
-  const match = cookieHeader.match(/sf_token=([^;]+)/);
-  if (!match) return null;
-  try {
-    const { payload } = await jwtVerify(match[1], getJWTSecret());
-    return payload.sub as string;
-  } catch {
-    return null;
-  }
-}
+import { getSession } from '@/lib/auth';
+import { NextRequest } from 'next/server';
 
 export async function POST(req: Request) {
-  const cookieHeader = req.headers.get('cookie');
-  const userId = await getUserIdFromCookie(cookieHeader);
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const session = await getSession(req as NextRequest);
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const userId = session.id;
 
   const apiKey = process.env.TERMII_API_KEY;
   if (!apiKey) {

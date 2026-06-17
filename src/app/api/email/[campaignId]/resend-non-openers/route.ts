@@ -1,24 +1,13 @@
 import { NextResponse } from 'next/server';
-
-function getUserIdFromCookie(cookieHeader: string | null): string | null {
-  if (!cookieHeader) return null;
-  const match = cookieHeader.match(/sf_token=([^;]+)/);
-  if (!match) return null;
-  try {
-    const payload = JSON.parse(Buffer.from(match[1].split('.')[1], 'base64').toString());
-    return payload.sub || null;
-  } catch {
-    return null;
-  }
-}
+import { getSession } from '@/lib/auth';
+import { NextRequest } from 'next/server';
 
 export async function POST(
   req: Request,
   { params }: { params: { campaignId: string } }
 ) {
-  const cookieHeader = req.headers.get('cookie');
-  const userId = getUserIdFromCookie(cookieHeader);
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const session = await getSession(req as NextRequest);
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const apiKey = process.env.MAILCHIMP_API_KEY;
   const dc = process.env.MAILCHIMP_DC;
