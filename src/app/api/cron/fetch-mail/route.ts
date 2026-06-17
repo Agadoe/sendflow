@@ -17,10 +17,9 @@ function isAuthorized(req: NextRequest): boolean {
   if (!secret) return false;
   const auth = req.headers.get('authorization');
   if (auth === `Bearer ${secret}`) return true;
-  // Vercel cron sends a special header; allow it as a fallback in production
-  // when CRON_SECRET is also set in the project.
+  // Vercel cron sends a special header; validate it against CRON_SECRET.
   const vercelCron = req.headers.get('x-vercel-cron');
-  if (process.env.NODE_ENV === 'production' && vercelCron && secret) {
+  if (process.env.NODE_ENV === 'production' && vercelCron === secret) {
     return true;
   }
   return false;

@@ -2,9 +2,12 @@ import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
 import { NextRequest } from 'next/server';
 
+import { requirePlan } from '@/lib/plans';
+
 export async function POST(req: Request) {
   const session = await getSession(req as NextRequest);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  try { requirePlan(session.plan, 'apiKeyAccess'); } catch (e: any) { return NextResponse.json({ error: e.message }, { status: e.status }); }
   const userId = session.id;
 
   const apiKey = process.env.TERMII_API_KEY;
