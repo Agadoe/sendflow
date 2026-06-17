@@ -28,7 +28,7 @@ export async function POST(req: Request) {
 
   const link = await prisma.clickToWhatsAppLink.create({
     data: {
-      userId,
+      userId: session.id,
       name,
       phone: phone.replace(/\D/g, ''),
       prefillMsg: prefillMsg || null,

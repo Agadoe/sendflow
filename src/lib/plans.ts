@@ -20,8 +20,9 @@ export interface PlanLimits {
 /** Single source of truth for all plan limits. */
 export const PLANS: Record<PlanCode, PlanLimits> = {
   FREE: {
-    maxContacts: 100,
-    maxCampaignsPerMonth: 10,
+    // 🎁 BETA BOOST: doubled limits during beta testing (revert after launch)
+    maxContacts: 200,
+    maxCampaignsPerMonth: 25,
     bulkSend: true,
     maxTeamMembers: 1,
     maxForms: 1,
