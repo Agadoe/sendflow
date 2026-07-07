@@ -46,7 +46,8 @@ async function sendViaDaemon(phone: string, message: string): Promise<void> {
   const res = await fetch(`${DAEMON_URL}/send`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ phone, message }),
+    // Daemon expects { to, message } — not { phone, message }.
+    body: JSON.stringify({ to: phone, message }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: 'Unknown error' }));

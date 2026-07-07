@@ -141,11 +141,13 @@ async function sendViaDaemon(userId: string, phone: string, message: string): Pr
       'Content-Type': 'application/json',
       'X-User-Id': userId,
     },
-    body: JSON.stringify({ phone, message }),
+    // Daemon expects { to, message } — not { phone, message }.
+    // Sending 'phone' returned a 400 'to and message are required' for months.
+    body: JSON.stringify({ to: phone, message }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: 'Unknown error' }));
-    throw new Error(err.error || `Daemon returned ${res.status}`);
+    throw new Error(err.error || err.message || `Daemon returned ${res.status}`);
   }
 }
 

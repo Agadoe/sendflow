@@ -61,7 +61,8 @@ export async function POST(req: Request) {
     }
 
     const formatted = formatPhone(phone);
-    const body = JSON.stringify({ phone: formatted, message });
+    // Daemon expects { to, message } — not { phone, message }.
+    const body = JSON.stringify({ to: formatted, message });
 
     const res = await fetchDaemon('/wacli/send', {
       method: 'POST',
