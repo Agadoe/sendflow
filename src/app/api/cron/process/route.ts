@@ -67,36 +67,29 @@ export async function POST(req: Request) {
         lte: todayEnd,
       },
     },
-    include: {
-      user: true,
-      messages: { include: { contact: true } },
-    },
+    include: { messages: true },
+    take: 10, // safety: max 10 recurring campaigns per cron tick
   });
 
-  results.recurring = { found: recurringCampaigns.length, sent: 0 };
+  results.recurring = { found: recurringCampaigns.length, sent: 0, errors: [] as string[] };
 
   for (const campaign of recurringCampaigns) {
     try {
-      for (const message of campaign.messages) {
-        if (message.status === 'PENDING') {
-          await sendWhatsApp(campaign.userId, message.contact.phone, campaign.content);
-          await prisma.message.update({
-            where: { id: message.id },
-            data: { status: 'SENT', sentAt: new Date() },
-          });
-          results.recurring.sent++;
-        }
-      }
-
-      // Advance to next recurrence
-      const nextDate = getNextRecurrence(campaign.scheduledAt!, campaign.recurrence!);
-      await prisma.campaign.update({
-        where: { id: campaign.id },
-        data: { scheduledAt: nextDate },
-      });
+      // Delegate to the canonical send route — same path the UI uses.
+      // Loops internally until done (same as dashboard UI), respecting
+      // business hours, rate limits, opt-in, dedup, human delays.
+      const result = await runCampaignSend(campaign.id, campaign.userId, 9 * 60_000);
+      results.recurring.sent += result.sent;
     } catch (err: any) {
-      results.recurring.error = err.message;
+      results.recurring.errors.push(`${campaign.id}: ${err.message}`);
     }
+
+    // Advance to next recurrence regardless of send outcome
+    const nextDate = getNextRecurrence(campaign.scheduledAt!, campaign.recurrence!);
+    await prisma.campaign.update({
+      where: { id: campaign.id },
+      data: { scheduledAt: nextDate },
+    });
   }
 
   // ── 3. Scheduled (one-time) campaigns due now ────────────────────────────
@@ -106,37 +99,29 @@ export async function POST(req: Request) {
       recurrence: null,
       scheduledAt: { lte: now },
     },
-    include: {
-      user: true,
-      messages: { include: { contact: true } },
-    },
+    include: { messages: true },
+    take: 10, // safety: max 10 one-time campaigns per cron tick
+    orderBy: { scheduledAt: 'asc' }, // oldest first
   });
 
-  results.campaigns = { found: dueCampaigns.length, sent: 0, failed: 0 };
+  results.campaigns = { found: dueCampaigns.length, sent: 0, failed: 0, errors: [] as string[] };
 
   for (const campaign of dueCampaigns) {
-    try {
-      for (const message of campaign.messages) {
-        if (message.status === 'PENDING') {
-          await sendWhatsApp(campaign.userId, message.contact.phone, campaign.content);
-          await prisma.message.update({
-            where: { id: message.id },
-            data: { status: 'SENT', sentAt: new Date() },
-          });
-          results.campaigns.sent++;
-        }
-      }
+    // Idempotency guard: another cron tick may already be running this one.
+    // If status flipped to SENDING between the findMany and now, skip.
+    const fresh = await prisma.campaign.findUnique({
+      where: { id: campaign.id },
+      select: { status: true },
+    });
+    if (fresh?.status === 'SENDING') continue;
 
-      await prisma.campaign.update({
-        where: { id: campaign.id },
-        data: { status: 'SENT', sentAt: new Date() },
-      });
+    try {
+      const result = await runCampaignSend(campaign.id, campaign.userId, 9 * 60_000);
+      results.campaigns.sent += result.sent;
+      results.campaigns.failed += result.failed;
     } catch (err: any) {
-      await prisma.campaign.update({
-        where: { id: campaign.id },
-        data: { status: 'FAILED' },
-      });
       results.campaigns.failed++;
+      results.campaigns.errors.push(`${campaign.id}: ${err.message}`);
     }
   }
 
@@ -169,6 +154,101 @@ export async function POST(req: Request) {
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
+
+/**
+ * Run a campaign send by calling /api/campaigns/send in a loop, just like
+ * the dashboard UI does. Stops when the campaign reports done, when the
+ * time budget is exhausted, or when an error persists across retries.
+ *
+ * This is the canonical path: respects business hours, rate limits,
+ * opt-in, dedup, human delays, batched processing.
+ */
+async function runCampaignSend(
+  campaignId: string,
+  userId: string,
+  maxDurationMs: number = 9 * 60_000
+): Promise<{ sent: number; failed: number; skipped: number; done: boolean; reason?: string }> {
+  const deadline = Date.now() + maxDurationMs;
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  let lastError: string | undefined;
+  let lastSent = 0;
+  let lastFailed = 0;
+  let lastSkipped = 0;
+  let sameErrorStreak = 0;
+
+  while (Date.now() < deadline) {
+    let res: Response;
+    try {
+      res = await fetch(`${baseUrl}/api/campaigns/send`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          // Bypass cookie auth: cron jobs are trusted internal calls.
+          // /api/campaigns/send validates X-Cron-Secret matches CRON_SECRET
+          // env, then trusts the X-User-Id to look up the user.
+          'X-Cron-Secret': process.env.CRON_SECRET || '',
+          'X-User-Id': userId,
+        },
+        body: JSON.stringify({ campaignId, batchSize: 3 }),
+      });
+    } catch (e: any) {
+      // Network/timeout error
+      sameErrorStreak++;
+      if (sameErrorStreak >= 3) {
+        return { sent: lastSent, failed: lastFailed, skipped: lastSkipped, done: false, reason: `network: ${e.message}` };
+      }
+      await sleep(5000);
+      continue;
+    }
+
+    // 401 means the X-User-Id bypass didn't work — fail loudly
+    if (res.status === 401) {
+      throw new Error('cron: campaigns/send returned 401 (auth bypass not working)');
+    }
+
+    const data = await res.json().catch(() => ({} as any));
+
+    if (!res.ok) {
+      // Route-level error (e.g. outside business hours, rate limited).
+      // For 429 we want to back off and try again on next tick.
+      if (res.status === 429) {
+        return { sent: lastSent, failed: lastFailed, skipped: lastSkipped, done: false, reason: 'rate_limited' };
+      }
+      if (res.status === 403 && typeof data.error === 'string' && /business hour|8:00|20:00/i.test(data.error)) {
+        return { sent: lastSent, failed: lastFailed, skipped: lastSkipped, done: false, reason: 'outside_business_hours' };
+      }
+      // Other errors — count and retry up to 3 times
+      if (data.error === lastError) sameErrorStreak++;
+      else sameErrorStreak = 1;
+      lastError = data.error;
+      if (sameErrorStreak >= 3) {
+        return { sent: lastSent, failed: lastFailed, skipped: lastSkipped, done: false, reason: data.error };
+      }
+      await sleep(5000);
+      continue;
+    }
+
+    // Success — reset error streak
+    sameErrorStreak = 0;
+    lastError = undefined;
+    lastSent = data.sent ?? lastSent;
+    lastFailed = data.failed ?? lastFailed;
+    lastSkipped = data.skipped ?? lastSkipped;
+
+    if (data.done) {
+      return { sent: lastSent, failed: lastFailed, skipped: lastSkipped, done: true };
+    }
+
+    // Pause before next batch (matches dashboard UI pacing: 5-8s)
+    await sleep(5000 + Math.floor(Math.random() * 3000));
+  }
+
+  return { sent: lastSent, failed: lastFailed, skipped: lastSkipped, done: false, reason: 'time_budget_exhausted' };
+}
+
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}
 
 async function sendWhatsApp(userId: string, phone: string, content: string) {
   const res = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/wacli/send`, {
