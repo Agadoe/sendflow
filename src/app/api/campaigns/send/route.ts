@@ -158,7 +158,7 @@ export async function POST(req: Request) {
   // 2. Trusted cron: X-Cron-Secret + X-User-Id headers (internal call from /api/cron/process)
   // Cron secret is rotated independently from JWT; if cron secret is missing in env,
   // the bypass is disabled and only cookie auth works.
-  let user: { id: string; timezone: string | null; plan: string; role: string } | null = null;
+  let user: any = null;
   const cronSecret = req.headers.get('x-cron-secret');
   const cronUserId = req.headers.get('x-user-id');
   if (cronSecret && cronSecret === process.env.CRON_SECRET && cronUserId) {
