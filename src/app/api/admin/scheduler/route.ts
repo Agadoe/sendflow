@@ -72,14 +72,18 @@ export async function POST(req: Request) {
     const result = await callAdmin('POST', { action });
 
     // Audit log — best-effort, don't fail the toggle if logging fails
-    await (prisma as any).auditLog.create({
-      data: {
-        userId: user!.id,
-        action: `scheduler.${action}`,
-        target: 'sendflow-scheduler',
-        metadata: JSON.stringify({ actor: user!.email, result }),
-      },
-    }).catch(() => {});
+    try {
+      await (prisma as any).auditLog.create({
+        data: {
+          userId: user!.id,
+          action: `scheduler.${action}`,
+          target: 'sendflow-scheduler',
+          metadata: JSON.stringify({ actor: user!.email, result }),
+        },
+      });
+    } catch {
+      // If auditLog model doesn't exist, swallow — don't fail the toggle
+    }
 
     return NextResponse.json({ ok: true, ...result });
   } catch (e: any) {
