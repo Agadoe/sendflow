@@ -3,6 +3,56 @@
 import { useState, useEffect } from 'react';
 import toast, { Toaster } from 'react-hot-toast';
 
+/**
+ * Renders a small "Next send: in 2 min" / "in 1 hr" / "at 14:30" hint
+ * under the status badge for SCHEDULED campaigns. Ticks every 30s.
+ * If recurrence is set, also shows a 🔁 badge.
+ */
+function NextSendHint({ scheduledAt, recurrence }: { scheduledAt: string; recurrence: string | null }) {
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const target = new Date(scheduledAt).getTime();
+  const ms = target - now;
+  const past = ms <= 0;
+  const absMs = Math.abs(ms);
+
+  let label: string;
+  if (past) {
+    // cron fires every minute, so a few seconds of "overdue" is normal
+    if (absMs < 90_000) label = 'firing now…';
+    else if (absMs < 60 * 60_000) label = `${Math.round(absMs / 60_000)} min overdue`;
+    else label = 'overdue';
+  } else if (absMs < 60_000) {
+    label = `in ${Math.max(1, Math.round(absMs / 1000))}s`;
+  } else if (absMs < 60 * 60_000) {
+    label = `in ${Math.round(absMs / 60_000)} min`;
+  } else if (absMs < 24 * 60 * 60_000) {
+    const hours = Math.floor(absMs / (60 * 60_000));
+    const mins = Math.round((absMs % (60 * 60_000)) / 60_000);
+    label = mins > 0 ? `in ${hours}h ${mins}m` : `in ${hours}h`;
+  } else {
+    label = `at ${new Date(scheduledAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}`;
+  }
+
+  const recurrenceLabel = recurrence ? { DAILY: '🔁 daily', WEEKLY: '🔁 weekly', MONTHLY: '🔁 monthly' }[recurrence] : null;
+
+  return (
+    <div className="mt-1.5 flex flex-col gap-0.5">
+      <div className={`text-[10px] font-medium ${past ? 'text-amber animate-pulse' : 'text-blue-600'}`}>
+        ⏰ {label}
+      </div>
+      {recurrenceLabel && (
+        <div className="text-[10px] text-slate-light">{recurrenceLabel}</div>
+      )}
+    </div>
+  );
+}
+
 export default function CampaignsPage() {
   const [campaigns, setCampaigns] = useState<any[]>([]);
   const [showModal, setShowModal] = useState(false);
@@ -172,6 +222,9 @@ export default function CampaignsPage() {
                       )}
                       {isSending && progress && (
                         <div className="text-[10px] text-slate-light mt-0.5">{progress.sent}/{progress.total}</div>
+                      )}
+                      {c.status === 'SCHEDULED' && c.scheduledAt && (
+                        <NextSendHint scheduledAt={c.scheduledAt} recurrence={c.recurrence} />
                       )}
                     </td>
                     <td className="px-6 py-4 text-sm text-slate">{c._count?.messages || 0}</td>
