@@ -28,10 +28,46 @@ export default function SettingsPage() {
   const [generatedKey, setGeneratedKey] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
+  // Scheduler state
+  const [scheduler, setScheduler] = useState<{ enabled: boolean; timerActive: boolean; lastRun: string | null; lastResult: string | null; lastDurationSec: number | null } | null>(null);
+  const [schedulerLoading, setSchedulerLoading] = useState(false);
+  const [togglingScheduler, setTogglingScheduler] = useState(false);
+
   useEffect(() => {
     if (activeTab === 'team') loadTeam();
     if (activeTab === 'apikeys') loadKeys();
+    if (activeTab === 'scheduler') loadScheduler();
   }, [activeTab]);
+
+  async function loadScheduler() {
+    setSchedulerLoading(true);
+    try {
+      const res = await fetch('/api/admin/scheduler');
+      const data = await res.json();
+      if (res.ok) setScheduler(data);
+      else toast.error(data.error || 'Failed to load scheduler state');
+    } finally { setSchedulerLoading(false); }
+  }
+
+  async function toggleScheduler() {
+    if (!scheduler) return;
+    setTogglingScheduler(true);
+    const action = scheduler.enabled ? 'disable' : 'enable';
+    try {
+      const res = await fetch('/api/admin/scheduler', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success(`Scheduler ${action}d`);
+        await loadScheduler();
+      } else {
+        toast.error(data.error || 'Failed');
+      }
+    } finally { setTogglingScheduler(false); }
+  }
 
   async function loadTeam() {
     setTeamLoading(true);
@@ -213,7 +249,7 @@ export default function SettingsPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 bg-gray-100 rounded-btn p-1 w-fit">
-        {['links', 'team', 'apikeys'].map(tab => (
+        {['links', 'team', 'apikeys', 'scheduler'].map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -221,7 +257,7 @@ export default function SettingsPage() {
               activeTab === tab ? 'bg-white text-slate shadow-sm' : 'text-slate-light hover:text-slate'
             }`}
           >
-            {tab === 'links' ? 'Click-to-WhatsApp' : tab === 'team' ? 'Team Members' : 'API Keys'}
+            {tab === 'links' ? 'Click-to-WhatsApp' : tab === 'team' ? 'Team Members' : tab === 'apikeys' ? 'API Keys' : 'Scheduler'}
           </button>
         ))}
       </div>
@@ -676,6 +712,89 @@ export default function SettingsPage() {
           </div>
         </div>
       )}
+
+      {/* Scheduler Tab */}
+      {activeTab === 'scheduler' && (
+        <div className="space-y-5">
+          <div>
+            <h2 className="font-heading text-lg text-slate">Campaign Scheduler</h2>
+            <p className="text-xs text-slate-light mt-0.5">Control the background job that fires SCHEDULED campaigns every minute</p>
+          </div>
+
+          {schedulerLoading ? (
+            <div className="text-center py-12 text-slate-light">Loading scheduler state…</div>
+          ) : scheduler ? (
+            <div className="space-y-4">
+              <div className="bg-surface rounded-card border border-gray-100 p-6">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`w-2.5 h-2.5 rounded-full ${scheduler.enabled ? 'bg-green animate-pulse' : 'bg-red-400'}`} />
+                      <span className="font-semibold text-slate">
+                        Scheduler is {scheduler.enabled ? 'RUNNING' : 'PAUSED'}
+                      </span>
+                    </div>
+                    <p className="text-sm text-slate-light">
+                      {scheduler.enabled
+                        ? `New SCHEDULED campaigns will fire within 60 seconds of their scheduled time.`
+                        : `New SCHEDULED campaigns will NOT fire until you re-enable. Already-running sends will complete.`}
+                    </p>
+                  </div>
+                  <button
+                    onClick={toggleScheduler}
+                    disabled={togglingScheduler}
+                    className={`px-5 py-2.5 rounded-btn font-semibold text-white text-sm transition-colors disabled:opacity-60 flex items-center gap-2 ${
+                      scheduler.enabled
+                        ? 'bg-red-500 hover:bg-red-600'
+                        : 'bg-green-500 hover:bg-green-600'
+                    }`}
+                  >
+                    {togglingScheduler ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : null}
+                    {scheduler.enabled ? '⏸ Pause' : '▶ Resume'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="bg-surface rounded-card border border-gray-100 p-5">
+                <h3 className="text-xs font-semibold text-slate-light uppercase tracking-wider mb-3">Last Run</h3>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <div className="text-slate-light text-xs">When</div>
+                    <div className="font-mono text-slate">
+                      {scheduler.lastRun ? new Date(scheduler.lastRun).toLocaleString() : 'never'}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-slate-light text-xs">Result</div>
+                    <div className="font-mono text-slate">
+                      {scheduler.lastResult || '—'}
+                      {scheduler.lastDurationSec != null && (
+                        <span className="text-slate-light"> ({scheduler.lastDurationSec.toFixed(1)}s)</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={loadScheduler}
+                  className="mt-3 text-xs text-amber hover:text-amber-dark transition-colors"
+                >
+                  ↻ Refresh
+                </button>
+              </div>
+
+              <div className="bg-gray-50 rounded-card border border-gray-100 p-4 text-xs text-slate-light space-y-1">
+                <div><strong className="text-slate">Tip:</strong> pause the scheduler if you need to do database maintenance, or to test campaigns in isolation without the timer firing.</div>
+                <div>Pausing is immediate — the systemd timer keeps checking the flag, but the service skips when the flag is absent.</div>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-red-50 border border-red-200 rounded-card p-4 text-sm text-red-700">
+              Could not reach the scheduler admin service. Check that <code className="bg-red-100 px-1 rounded">bore.pub:26657</code> is reachable and the service is running on the VPS.
+            </div>
+          )}
+        </div>
+      )}
+
     </div>
   );
 }
