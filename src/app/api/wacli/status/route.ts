@@ -63,16 +63,20 @@ export async function GET() {
     const data = await res.json();
 
     // Exhaustive state mapping from daemon → app
-    const daemonStatus = data.status || data.state || data.connection;
+    // Daemon /wacli/health returns: { status: "ok", connection: "open"|"close"|"connecting", ... }
+    // We must check `data.connection` explicitly — `data.status` is "ok" even when connected.
+    const connectionState = data.connection; // "open" | "close" | "connecting" | undefined
     let appState: string;
-    if (data.connected === true || daemonStatus === 'CONNECTED' || daemonStatus === 'open') {
+    if (data.connected === true || connectionState === 'open') {
       appState = 'CONNECTED';
-    } else if (daemonStatus === 'QR_READY') {
+    } else if (connectionState === 'close' || connectionState === 'disconnected') {
+      appState = 'DISCONNECTED';
+    } else if (data.qr || data.status === 'QR_READY') {
       appState = 'QR_READY';
-    } else if (daemonStatus === 'connecting' || daemonStatus === 'waiting' || daemonStatus === 'INITIALIZING' || daemonStatus === 'STARTING' || daemonStatus === 'RECONNECTING') {
+    } else if (connectionState === 'connecting' || data.status === 'connecting' || data.status === 'waiting' || data.status === 'INITIALIZING' || data.status === 'STARTING' || data.status === 'RECONNECTING') {
       appState = 'CONNECTING';
     } else {
-      appState = daemonStatus || 'DISCONNECTED';
+      appState = connectionState || data.status || 'DISCONNECTED';
     }
 
     // Only write to DB if state actually changed — prevents hammering the DB
@@ -85,14 +89,17 @@ export async function GET() {
     const phone = data.phone || data.info?.pushName || null;
     const stateChanged = currentUser?.wacliStatus !== appState;
     const phoneChanged = currentUser?.wacliPhone !== phone;
+    const isNowConnected = appState === 'CONNECTED';
+    // wasConnectedAt is the DB value — only update when we transition INTO connected
+    const transitioningToConnected = isNowConnected && currentUser?.wacliStatus !== 'CONNECTED';
 
-    if (stateChanged || phoneChanged) {
+    if (stateChanged || phoneChanged || transitioningToConnected) {
       await prisma.user.update({
         where: { id: user.id },
         data: {
           wacliStatus: appState,
           wacliPhone: phone,
-          ...(data.connected ? { wacliLastConnectedAt: new Date() } : {})
+          ...(transitioningToConnected ? { wacliLastConnectedAt: new Date() } : {})
         }
       });
     }
