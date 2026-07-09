@@ -56,32 +56,86 @@ function NextSendHint({ scheduledAt, recurrence }: { scheduledAt: string; recurr
 export default function CampaignsPage() {
   const [campaigns, setCampaigns] = useState<any[]>([]);
   const [showModal, setShowModal] = useState(false);
-  const [form, setForm] = useState({ name: '', content: '', scheduledAt: '', recurrence: '' });
+  const [form, setForm] = useState({
+    name: '',
+    content: '',
+    scheduledAt: '',
+    recurrence: '',
+    segmentIds: [] as string[],
+  });
   const [creating, setCreating] = useState(false);
   const [sendingCampaign, setSendingCampaign] = useState<string | null>(null);
   const [sendProgress, setSendProgress] = useState<Record<string, { sent: number; total: number }>>({});
   const [contactIds, setContactIds] = useState<string[]>([]);
+  const [segments, setSegments] = useState<Array<{ id: string; name: string; tag: string; color: string | null; contactCount: number }>>([]);
+  const [resolvedCount, setResolvedCount] = useState<number | null>(null);
+  const [resolving, setResolving] = useState(false);
 
   useEffect(() => {
     fetch('/api/campaigns').then(r => r.json()).then(d => setCampaigns(d.campaigns || [])).catch(() => {});
     fetch('/api/contacts').then(r => r.json()).then(d => setContactIds(d.contacts?.map((c: any) => c.id) || [])).catch(() => {});
+    fetch('/api/segments').then(r => r.json()).then(d => setSegments(d.segments || [])).catch(() => {});
   }, []);
+
+  // Live-resolve segmentIds → contact count as user toggles segments in the modal.
+  // Debounced so we don't hammer the API on every checkbox click.
+  useEffect(() => {
+    if (form.segmentIds.length === 0) {
+      setResolvedCount(null);
+      return;
+    }
+    setResolving(true);
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch('/api/segments/resolve', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ segmentIds: form.segmentIds }),
+        });
+        const data = await res.json();
+        if (res.ok) setResolvedCount(data.count);
+        else setResolvedCount(0);
+      } catch {
+        setResolvedCount(0);
+      } finally {
+        setResolving(false);
+      }
+    }, 250);
+    return () => clearTimeout(t);
+  }, [form.segmentIds]);
+
+  function toggleSegment(id: string) {
+    setForm((f) => ({
+      ...f,
+      segmentIds: f.segmentIds.includes(id)
+        ? f.segmentIds.filter((x) => x !== id)
+        : [...f.segmentIds, id],
+    }));
+  }
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     if (!form.name || !form.content) return;
+    if (form.segmentIds.length === 0 && contactIds.length === 0) {
+      toast.error('Select at least one segment or import contacts first.');
+      return;
+    }
     setCreating(true);
     try {
       const res = await fetch('/api/campaigns', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        // Send BOTH contactIds (resolved snapshot for the create-time preview)
+        // AND segmentIds (re-resolved at send time so newly-tagged contacts
+        // get the send). Server prefers segmentIds for the actual send.
         body: JSON.stringify({ ...form, contactIds }),
       });
       const data = await res.json();
       if (res.ok) {
         setCampaigns([data.campaign, ...campaigns]);
         setShowModal(false);
-        setForm({ name: '', content: '', scheduledAt: '', recurrence: '' });
+        setForm({ name: '', content: '', scheduledAt: '', recurrence: '', segmentIds: [] });
+        setResolvedCount(null);
         toast.success('Campaign created!');
       } else {
         toast.error(data.error || 'Failed');
@@ -322,6 +376,58 @@ export default function CampaignsPage() {
                 <div className="text-xs text-slate-light mt-1">Tip: Use {"{{name}}"} for personalized messages. Unicode and emoji supported! 💇‍♀️</div>
               </div>
               <div>
+                <label className="block text-sm font-medium text-slate mb-1.5">
+                  Target segments
+                  <span className="text-slate-light font-normal ml-1">(multi-select, union)</span>
+                </label>
+                {segments.length === 0 ? (
+                  <div className="text-xs text-slate-light p-3 bg-gray-50 rounded-btn border border-gray-200">
+                    No segments yet. <a href="/dashboard/segments" className="text-amber hover:underline">Create one →</a>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto border border-gray-200 rounded-btn p-2 bg-white">
+                    {segments.map((s) => {
+                      const selected = form.segmentIds.includes(s.id);
+                      return (
+                        <label
+                          key={s.id}
+                          className={`flex items-center gap-3 px-2 py-1.5 rounded cursor-pointer transition-colors ${
+                            selected ? 'bg-amber/10' : 'hover:bg-gray-50'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selected}
+                            onChange={() => toggleSegment(s.id)}
+                            className="w-4 h-4 rounded border-gray-300 text-amber focus:ring-amber"
+                          />
+                          {s.color && (
+                            <span
+                              className="w-2.5 h-2.5 rounded-full shrink-0"
+                              style={{ backgroundColor: s.color }}
+                            />
+                          )}
+                          <span className="text-sm text-slate flex-1">{s.name}</span>
+                          <span className="text-xs text-slate-light">{s.contactCount}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+                {form.segmentIds.length > 0 && (
+                  <div className="text-xs text-slate-light mt-1.5">
+                    {resolving ? (
+                      <span>Resolving…</span>
+                    ) : (
+                      <span>
+                        Resolved to <strong className="text-slate">{resolvedCount ?? '—'}</strong> contact
+                        {resolvedCount === 1 ? '' : 's'} (deduped)
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+              <div>
                 <label className="block text-sm font-medium text-slate mb-1.5">Schedule (optional)</label>
                 <input
                   type="datetime-local"
@@ -344,7 +450,17 @@ export default function CampaignsPage() {
                 </select>
               </div>
               <div className="bg-amber/5 border border-amber/10 rounded-lg px-4 py-3 text-sm text-slate">
-                <span className="font-semibold">📋 Ready to send to {contactIds.length} contacts</span>
+                {form.segmentIds.length > 0 ? (
+                  <span>
+                    <span className="font-semibold">📋 Sending to {resolvedCount ?? '—'} contacts</span>
+                    <span className="text-slate-light"> (resolved from {form.segmentIds.length} segment{form.segmentIds.length === 1 ? '' : 's'} at send time)</span>
+                  </span>
+                ) : (
+                  <span>
+                    <span className="font-semibold">📋 Ready to send to {contactIds.length} contacts</span>
+                    <span className="text-slate-light"> (all contacts, no segment filter)</span>
+                  </span>
+                )}
               </div>
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setShowModal(false)} className="flex-1 py-2.5 rounded-btn bg-gray-100 hover:bg-gray-200 text-slate font-medium transition-colors">Cancel</button>

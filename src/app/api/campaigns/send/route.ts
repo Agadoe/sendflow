@@ -199,6 +199,56 @@ export async function POST(req: Request) {
   }
 
   // Mark SENDING if this is the first batch (campaign status is DRAFT or SCHEDULED)
+  // Resolve segmentIds at send time if the campaign was created with segments
+  // instead of a static contactIds snapshot. This means a campaign scheduled
+  // for Friday will pick up contacts tagged on Thursday.
+  const preCampaign = await prisma.campaign.findUnique({
+    where: { id: campaignId, userId: user.id },
+    select: { id: true, segmentIds: true, _count: { select: { messages: true } } },
+  });
+  if (!preCampaign) {
+    return NextResponse.json({ error: 'Campaign not found' }, { status: 404 });
+  }
+  if (preCampaign.segmentIds) {
+    let segIds: string[] = [];
+    try { segIds = JSON.parse(preCampaign.segmentIds); } catch {}
+    if (segIds.length > 0 && preCampaign._count.messages === 0) {
+      // Resolve segments → contact IDs at send time
+      const segs = await prisma.segment.findMany({
+        where: { id: { in: segIds }, userId: user.id },
+        select: { tag: true },
+      });
+      const tags = new Set(segs.map((s) => s.tag));
+      const contacts = await prisma.contact.findMany({
+        where: { userId: user.id },
+        select: { id: true, tags: true },
+      });
+      const matchedIds: string[] = [];
+      for (const c of contacts) {
+        try {
+          const ct: string[] = JSON.parse(c.tags || '[]');
+          if (ct.some((t) => tags.has(t))) matchedIds.push(c.id);
+        } catch {}
+      }
+      if (matchedIds.length === 0) {
+        return NextResponse.json(
+          { error: 'No contacts match the campaign segments' },
+          { status: 400 }
+        );
+      }
+      // Create the Message rows now (so the rest of the send logic can proceed).
+      // Duplicate-key conflicts on (campaignId, contactId) are avoided by the
+      // preCampaign._count.messages === 0 check above.
+      await prisma.message.createMany({
+        data: matchedIds.map((contactId) => ({
+          campaignId: preCampaign.id,
+          contactId,
+          status: 'PENDING',
+        })),
+      });
+    }
+  }
+
   const campaign = await prisma.campaign.findUnique({
     where: { id: campaignId, userId: user.id },
     include: {

@@ -50,4 +50,6 @@ tsconfig.tsbuildinfo
 .env
 .env.bak
 .env.local
+.env.prod
 MEMORY-BUGS.md
+.env*.local

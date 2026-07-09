@@ -31,6 +31,7 @@ model User {
 
   campaigns             Campaign[]
   contacts              Contact[]
+  segments              Segment[]
   payments              Payment[]
   apiKeys               ApiKey[]
   sessions              Session[]
@@ -91,6 +92,12 @@ model Campaign {
   scheduledAt DateTime?
   sentAt      DateTime?
   recurrence  String? // DAILY | WEEKLY | MONTHLY | null
+  // Optional list of Segment IDs to resolve at send time (JSON array string).
+  // When set, the send route resolves these to contactIds fresh on each
+  // execution (so newly-tagged contacts get scheduled sends).
+  // When null/empty, the campaign uses the static Message rows created at
+  // campaign-create time.
+  segmentIds  String?   @default("[]")
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -133,6 +140,37 @@ model Contact {
   user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
   messages              Message[]
   dripScheduledMessages DripScheduledMessage[]
+}
+
+// Segment: a saved tag-filter used to target contacts in campaigns.
+// v1 (2026-07-09): one tag per segment. Multi-select in the campaign modal
+// resolves to the union of matching contacts, deduped at send time.
+//
+// Future-proofed for v2:
+//   - `matchType: 'ANY' | 'ALL'` — when set to 'ALL', the contact must have
+//     ALL listed tags. Reserved on the model now so the migration is additive.
+//   - `color` — UI affordance, optional.
+//   - `description` — optional UI tooltip.
+//
+// The contact count is computed at read time from the Contact.tags JSON
+// column. There is no denormalized count column — that would require a
+// trigger or app-level sync on every Contact write, which is more risk
+// than the read-time cost for 5k-50k contact lists.
+model Segment {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  tag         String   // single tag to match against Contact.tags JSON array
+  color       String?  // optional, hex like "#F59E0B" for UI badges
+  description String?  // optional, free text
+  matchType   String   @default("ANY") // reserved for v2 (AND/OR within segment)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, name])
+  @@index([userId])
 }
 
 model Payment {

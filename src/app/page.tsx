@@ -26,6 +26,7 @@ export default function HomePage() {
   const [loading, setLoading] = useState(false);
   const [billing, setBilling] = useState<'monthly' | 'annual'>('monthly');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [waitlistCount, setWaitlistCount] = useState<number | null>(null);
 
   useEffect(() => {
     fetch('/api/auth/me')
@@ -34,7 +35,22 @@ export default function HomePage() {
         if (d.user) setIsLoggedIn(true);
       })
       .catch(() => {});
+
+    // Live waitlist count for the social-proof stats.
+    // Edge-cached (s-maxage=300) so this is cheap even with traffic.
+    fetch('/api/waitlist/count')
+      .then(r => r.json())
+      .then(d => {
+        if (typeof d?.count === 'number') setWaitlistCount(d.count);
+      })
+      .catch(() => {});
   }, []);
+
+  const waitlistDisplay = waitlistCount === null
+    ? '…'
+    : waitlistCount >= 100
+      ? `${Math.floor(waitlistCount / 100) * 100}+`
+      : String(waitlistCount);
 
   async function handleWaitlist(e: React.FormEvent) {
     e.preventDefault();
@@ -148,7 +164,7 @@ export default function HomePage() {
         <div className="max-w-4xl mx-auto text-center">
           <div className="inline-flex items-center gap-2 bg-amber/10 text-amber px-4 py-1.5 rounded-pill text-sm font-medium mb-6 animate-fade-up">
             <span className="w-2 h-2 rounded-full bg-amber animate-pulse" />
-            Now in early access — Join 200+ businesses
+            Now in early access — Join {waitlistDisplay} businesses
           </div>
           <h1 className="font-heading text-5xl md:text-6xl text-slate leading-tight mb-6 animate-fade-up" style={{ animationDelay: '80ms' }}>
             Send Bulk WhatsApp Messages<br />
@@ -279,7 +295,7 @@ export default function HomePage() {
       <section className="bg-surface border-y border-gray-100 py-6 px-6">
         <div className="max-w-4xl mx-auto flex flex-wrap items-center justify-center gap-8 text-center">
           {[
-            { num: '200+', label: 'Businesses on waitlist' },
+            { num: waitlistDisplay, label: 'Businesses on waitlist' },
             { num: '10+', label: 'Features shipped' },
             { num: '3', label: 'Countries at launch' },
             { num: '99.9%', label: 'Uptime target' },
@@ -470,7 +486,7 @@ export default function HomePage() {
       <section id="waitlist" className="py-20 px-6 bg-slate text-white text-center">
         <div className="max-w-2xl mx-auto">
           <h2 className="font-heading text-4xl mb-4">Ready to reach your customers?</h2>
-          <p className="text-gray-400 mb-8">Join 200+ African businesses already on the waitlist. Get 1 month free at launch.</p>
+          <p className="text-gray-400 mb-8">Join {waitlistDisplay} African businesses already on the waitlist. Get 1 month free at launch.</p>
           <a href="#waitlist-form" className="inline-block bg-amber hover:bg-amber-dark text-white font-semibold px-8 py-4 rounded-btn text-lg transition-all">
             Join the Waitlist — Free
           </a>

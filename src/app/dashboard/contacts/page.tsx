@@ -15,6 +15,9 @@ export default function ContactsPage() {
   const [phoneCol, setPhoneCol] = useState(0);
   const [nameCol, setNameCol] = useState(-1);
   const [csvOptIn, setCsvOptIn] = useState(false);
+  const [csvSegmentIds, setCsvSegmentIds] = useState<string[]>([]);
+  const [csvTagsExtra, setCsvTagsExtra] = useState('');
+  const [segments, setSegments] = useState<Array<{ id: string; name: string; tag: string; color: string | null; contactCount: number }>>([]);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Manual add form
@@ -25,7 +28,16 @@ export default function ContactsPage() {
 
   useEffect(() => {
     loadContacts();
+    loadSegments();
   }, []);
+
+  async function loadSegments() {
+    try {
+      const res = await fetch('/api/segments');
+      const data = await res.json();
+      setSegments(data.segments || []);
+    } catch {}
+  }
 
   async function loadContacts() {
     try {
@@ -76,6 +88,20 @@ export default function ContactsPage() {
       toast.error('Please confirm that all imported contacts have opted in to WhatsApp messages.');
       return;
     }
+    // Build the tag list: every selected segment contributes its tag,
+    // plus any free-text tags the user typed in the "Extra tags" field.
+    const segTagSet = new Set<string>();
+    for (const sid of csvSegmentIds) {
+      const seg = segments.find((s) => s.id === sid);
+      if (seg) segTagSet.add(seg.tag);
+    }
+    const extraTags = csvTagsExtra
+      .split(',')
+      .map((t) => t.trim())
+      .filter(Boolean);
+    for (const t of extraTags) segTagSet.add(t);
+    const tagList = Array.from(segTagSet);
+
     setImporting(true);
     try {
       const toImport = csvData.map(row => ({
@@ -83,6 +109,7 @@ export default function ContactsPage() {
         name: nameCol >= 0 ? row[nameCol] || undefined : undefined,
         optedIn: true,
         optedInSource: 'csv-import',
+        tags: tagList.length > 0 ? tagList : undefined,
       })).filter(c => c.phone.length >= 9);
 
       const res = await fetch('/api/contacts', {
@@ -92,11 +119,13 @@ export default function ContactsPage() {
       });
       const data = await res.json();
       if (res.ok) {
-        toast.success(`Imported ${data.created} contacts! ${data.skipped > 0 ? `(${data.skipped} duplicates skipped)` : ''}`);
+        toast.success(`Imported ${data.created} contacts!${data.skipped > 0 ? ` (${data.skipped} duplicates skipped)` : ''}${csvSegmentIds.length > 0 || csvTagsExtra ? ` Tagged with ${Array.from(new Set([...segments.filter((s) => csvSegmentIds.includes(s.id)).map((s) => s.tag), ...csvTagsExtra.split(',').map((t) => t.trim()).filter(Boolean)])).length} tag(s).` : ''}`);
         setShowImport(false);
         setCsvData([]);
         setHeaders([]);
         setCsvOptIn(false);
+        setCsvSegmentIds([]);
+        setCsvTagsExtra('');
         loadContacts();
       } else {
         toast.error(data.error || 'Import failed');
@@ -407,8 +436,62 @@ export default function ContactsPage() {
                       </label>
                     </div>
                   </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate mb-1.5">
+                      Tag imported contacts with
+                      <span className="text-slate-light font-normal ml-1">(multi-select)</span>
+                    </label>
+                    {segments.length === 0 ? (
+                      <div className="text-xs text-slate-light p-3 bg-gray-50 rounded-btn border border-gray-200">
+                        No segments yet. <a href="/dashboard/segments" className="text-amber hover:underline">Create one →</a> Tags can also be added later.
+                      </div>
+                    ) : (
+                      <div className="space-y-1.5 max-h-40 overflow-y-auto border border-gray-200 rounded-btn p-2 bg-white">
+                        {segments.map((s) => {
+                          const selected = csvSegmentIds.includes(s.id);
+                          return (
+                            <label
+                              key={s.id}
+                              className={`flex items-center gap-3 px-2 py-1.5 rounded cursor-pointer transition-colors ${
+                                selected ? 'bg-amber/10' : 'hover:bg-gray-50'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={selected}
+                                onChange={() => {
+                                  setCsvSegmentIds((prev) =>
+                                    prev.includes(s.id)
+                                      ? prev.filter((x) => x !== s.id)
+                                      : [...prev, s.id]
+                                  );
+                                }}
+                                className="w-4 h-4 rounded border-gray-300 text-amber focus:ring-amber"
+                              />
+                              {s.color && (
+                                <span
+                                  className="w-2.5 h-2.5 rounded-full shrink-0"
+                                  style={{ backgroundColor: s.color }}
+                                />
+                              )}
+                              <span className="text-sm text-slate flex-1">{s.name}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
+                    <div className="mt-2">
+                      <input
+                        type="text"
+                        placeholder="Extra tags (comma-separated, optional)"
+                        value={csvTagsExtra}
+                        onChange={(e) => setCsvTagsExtra(e.target.value)}
+                        className="w-full px-3 py-2 rounded-btn border border-gray-200 text-slate text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber/40"
+                      />
+                    </div>
+                  </div>
                   <div className="flex gap-3">
-                    <button onClick={() => { setCsvData([]); setHeaders([]); setCsvOptIn(false); }} className="flex-1 py-2.5 rounded-btn bg-gray-100 hover:bg-gray-200 text-slate font-medium transition-colors">Back</button>
+                    <button onClick={() => { setCsvData([]); setHeaders([]); setCsvOptIn(false); setCsvSegmentIds([]); setCsvTagsExtra(''); }} className="flex-1 py-2.5 rounded-btn bg-gray-100 hover:bg-gray-200 text-slate font-medium transition-colors">Back</button>
                     <button onClick={handleImport} disabled={importing} className="flex-1 py-2.5 rounded-btn bg-amber hover:bg-amber-dark text-white font-semibold transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
                       {importing ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : null}
                       {importing ? `Importing ${csvData.length}...` : `Import ${csvData.length} Contacts`}
