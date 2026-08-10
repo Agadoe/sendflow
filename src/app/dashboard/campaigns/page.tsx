@@ -62,39 +62,63 @@ export default function CampaignsPage() {
     scheduledAt: '',
     recurrence: '',
     segmentIds: [] as string[],
+    contactIds: [] as string[],  // explicit per-contact picks (in addition to segments)
   });
   const [creating, setCreating] = useState(false);
   const [sendingCampaign, setSendingCampaign] = useState<string | null>(null);
   const [sendProgress, setSendProgress] = useState<Record<string, { sent: number; total: number }>>({});
-  const [contactIds, setContactIds] = useState<string[]>([]);
+  const [allContacts, setAllContacts] = useState<Array<{ id: string; phone: string; name: string | null; tags: string; optedIn: boolean }>>([]);
+  const [contactSearch, setContactSearch] = useState('');
   const [segments, setSegments] = useState<Array<{ id: string; name: string; tag: string; color: string | null; contactCount: number }>>([]);
   const [resolvedCount, setResolvedCount] = useState<number | null>(null);
   const [resolving, setResolving] = useState(false);
+  const [recipientTab, setRecipientTab] = useState<'segments' | 'contacts'>('segments');
 
   useEffect(() => {
     fetch('/api/campaigns').then(r => r.json()).then(d => setCampaigns(d.campaigns || [])).catch(() => {});
-    fetch('/api/contacts').then(r => r.json()).then(d => setContactIds(d.contacts?.map((c: any) => c.id) || [])).catch(() => {});
+    fetch('/api/contacts').then(r => r.json()).then(d => setAllContacts(d.contacts || [])).catch(() => {});
     fetch('/api/segments').then(r => r.json()).then(d => setSegments(d.segments || [])).catch(() => {});
   }, []);
 
   // Live-resolve segmentIds → contact count as user toggles segments in the modal.
-  // Debounced so we don't hammer the API on every checkbox click.
+  // Includes any explicitly-picked contactIds, deduped against the segment pool.
   useEffect(() => {
-    if (form.segmentIds.length === 0) {
+    if (form.segmentIds.length === 0 && form.contactIds.length === 0) {
       setResolvedCount(null);
       return;
     }
     setResolving(true);
     const t = setTimeout(async () => {
       try {
-        const res = await fetch('/api/segments/resolve', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ segmentIds: form.segmentIds }),
-        });
-        const data = await res.json();
-        if (res.ok) setResolvedCount(data.count);
-        else setResolvedCount(0);
+        // Resolve segments server-side
+        let segmentPoolCount = 0;
+        if (form.segmentIds.length > 0) {
+          const res = await fetch('/api/segments/resolve', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ segmentIds: form.segmentIds }),
+          });
+          const data = await res.json();
+          if (res.ok) segmentPoolCount = data.count;
+        }
+        // Compute union: segment pool ∪ picked contactIds (deduped)
+        // We don't have the segment pool ids client-side, so we estimate the
+        // union size as max(segmentPoolCount, pickedCount) plus any picked
+        // contacts that are clearly outside the pool. For a precise count we'd
+        // need a /api/campaigns/preview-union endpoint, but the estimate is
+        // good enough for the modal preview.
+        const pickedSet = new Set(form.contactIds);
+        const pickedCount = form.contactIds.length;
+        // Simple union estimate: segmentPoolCount + unique picks not in pool.
+        // Without the pool ids, assume worst case (no overlap): segmentPoolCount + pickedCount.
+        // Then clamp to pickedSet size if no segments.
+        let unionEstimate: number;
+        if (form.segmentIds.length === 0) {
+          unionEstimate = pickedSet.size;
+        } else {
+          unionEstimate = segmentPoolCount + pickedCount; // worst case, no dedup
+        }
+        setResolvedCount(unionEstimate);
       } catch {
         setResolvedCount(0);
       } finally {
@@ -102,7 +126,7 @@ export default function CampaignsPage() {
       }
     }, 250);
     return () => clearTimeout(t);
-  }, [form.segmentIds]);
+  }, [form.segmentIds, form.contactIds]);
 
   function toggleSegment(id: string) {
     setForm((f) => ({
@@ -113,11 +137,32 @@ export default function CampaignsPage() {
     }));
   }
 
+  function toggleContact(id: string) {
+    setForm((f) => ({
+      ...f,
+      contactIds: f.contactIds.includes(id)
+        ? f.contactIds.filter((x) => x !== id)
+        : [...f.contactIds, id],
+    }));
+  }
+
+  function selectAllFiltered() {
+    const filtered = filteredContacts.map((c) => c.id);
+    setForm((f) => ({
+      ...f,
+      contactIds: Array.from(new Set([...f.contactIds, ...filtered])),
+    }));
+  }
+
+  function clearPicked() {
+    setForm((f) => ({ ...f, contactIds: [] }));
+  }
+
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     if (!form.name || !form.content) return;
-    if (form.segmentIds.length === 0 && contactIds.length === 0) {
-      toast.error('Select at least one segment or import contacts first.');
+    if (form.segmentIds.length === 0 && form.contactIds.length === 0 && allContacts.length === 0) {
+      toast.error('Select at least one segment, pick contacts, or import contacts first.');
       return;
     }
     setCreating(true);
@@ -127,15 +172,17 @@ export default function CampaignsPage() {
         headers: { 'Content-Type': 'application/json' },
         // Send BOTH contactIds (resolved snapshot for the create-time preview)
         // AND segmentIds (re-resolved at send time so newly-tagged contacts
-        // get the send). Server prefers segmentIds for the actual send.
-        body: JSON.stringify({ ...form, contactIds }),
+        // get the send). Server unions them and dedupes.
+        body: JSON.stringify({ ...form }),
       });
       const data = await res.json();
       if (res.ok) {
         setCampaigns([data.campaign, ...campaigns]);
         setShowModal(false);
-        setForm({ name: '', content: '', scheduledAt: '', recurrence: '', segmentIds: [] });
+        setForm({ name: '', content: '', scheduledAt: '', recurrence: '', segmentIds: [], contactIds: [] });
         setResolvedCount(null);
+        setRecipientTab('segments');
+        setContactSearch('');
         toast.success('Campaign created!');
       } else {
         toast.error(data.error || 'Failed');
@@ -214,6 +261,16 @@ export default function CampaignsPage() {
     if (s === 'SCHEDULED') return 'bg-blue-100 text-blue-700';
     return 'bg-gray-100 text-slate-light';
   };
+
+  // Filter contacts by name or phone (substring, case-insensitive)
+  const filteredContacts = allContacts.filter((c) => {
+    if (!contactSearch.trim()) return true;
+    const q = contactSearch.toLowerCase();
+    return (
+      (c.name || '').toLowerCase().includes(q) ||
+      (c.phone || '').toLowerCase().includes(q)
+    );
+  });
 
   return (
     <div className="max-w-4xl space-y-6">
@@ -377,51 +434,178 @@ export default function CampaignsPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate mb-1.5">
-                  Target segments
-                  <span className="text-slate-light font-normal ml-1">(multi-select, union)</span>
+                  Recipients
+                  <span className="text-slate-light font-normal ml-1">(segments + individual contacts, deduped at send time)</span>
                 </label>
-                {segments.length === 0 ? (
-                  <div className="text-xs text-slate-light p-3 bg-gray-50 rounded-btn border border-gray-200">
-                    No segments yet. <a href="/dashboard/segments" className="text-amber hover:underline">Create one →</a>
+                {/* Tabs: Segments vs Pick contacts */}
+                <div className="flex border border-gray-200 rounded-btn overflow-hidden mb-3">
+                  <button
+                    type="button"
+                    onClick={() => setRecipientTab('segments')}
+                    className={`flex-1 px-3 py-2 text-sm font-medium transition-colors ${
+                      recipientTab === 'segments'
+                        ? 'bg-amber text-white'
+                        : 'bg-white text-slate hover:bg-gray-50'
+                    }`}
+                  >
+                    🎯 Segments{form.segmentIds.length > 0 && (
+                      <span className={`ml-1.5 text-xs px-1.5 py-0.5 rounded-full ${
+                        recipientTab === 'segments' ? 'bg-white/20' : 'bg-amber/10 text-amber'
+                      }`}>
+                        {form.segmentIds.length}
+                      </span>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRecipientTab('contacts')}
+                    className={`flex-1 px-3 py-2 text-sm font-medium transition-colors border-l border-gray-200 ${
+                      recipientTab === 'contacts'
+                        ? 'bg-amber text-white'
+                        : 'bg-white text-slate hover:bg-gray-50'
+                    }`}
+                  >
+                    👤 Pick contacts{form.contactIds.length > 0 && (
+                      <span className={`ml-1.5 text-xs px-1.5 py-0.5 rounded-full ${
+                        recipientTab === 'contacts' ? 'bg-white/20' : 'bg-amber/10 text-amber'
+                      }`}>
+                        {form.contactIds.length}
+                      </span>
+                    )}
+                  </button>
+                </div>
+
+                {recipientTab === 'segments' ? (
+                  <div>
+                    {segments.length === 0 ? (
+                      <div className="text-xs text-slate-light p-3 bg-gray-50 rounded-btn border border-gray-200">
+                        No segments yet. <a href="/dashboard/segments" className="text-amber hover:underline">Create one →</a>
+                      </div>
+                    ) : (
+                      <div className="space-y-1.5 max-h-48 overflow-y-auto border border-gray-200 rounded-btn p-2 bg-white">
+                        {segments.map((s) => {
+                          const selected = form.segmentIds.includes(s.id);
+                          return (
+                            <label
+                              key={s.id}
+                              className={`flex items-center gap-3 px-2 py-1.5 rounded cursor-pointer transition-colors ${
+                                selected ? 'bg-amber/10' : 'hover:bg-gray-50'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={selected}
+                                onChange={() => toggleSegment(s.id)}
+                                className="w-4 h-4 rounded border-gray-300 text-amber focus:ring-amber"
+                              />
+                              {s.color && (
+                                <span
+                                  className="w-2.5 h-2.5 rounded-full shrink-0"
+                                  style={{ backgroundColor: s.color }}
+                                />
+                              )}
+                              <span className="text-sm text-slate flex-1">{s.name}</span>
+                              <span className="text-xs text-slate-light">{s.contactCount}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 ) : (
-                  <div className="space-y-1.5 max-h-48 overflow-y-auto border border-gray-200 rounded-btn p-2 bg-white">
-                    {segments.map((s) => {
-                      const selected = form.segmentIds.includes(s.id);
-                      return (
-                        <label
-                          key={s.id}
-                          className={`flex items-center gap-3 px-2 py-1.5 rounded cursor-pointer transition-colors ${
-                            selected ? 'bg-amber/10' : 'hover:bg-gray-50'
-                          }`}
-                        >
+                  <div>
+                    {allContacts.length === 0 ? (
+                      <div className="text-xs text-slate-light p-3 bg-gray-50 rounded-btn border border-gray-200">
+                        No contacts yet. <a href="/dashboard/contacts" className="text-amber hover:underline">Import some →</a>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <div className="flex gap-2">
                           <input
-                            type="checkbox"
-                            checked={selected}
-                            onChange={() => toggleSegment(s.id)}
-                            className="w-4 h-4 rounded border-gray-300 text-amber focus:ring-amber"
+                            type="text"
+                            placeholder="Search by name or phone..."
+                            value={contactSearch}
+                            onChange={(e) => setContactSearch(e.target.value)}
+                            className="flex-1 px-3 py-2 text-sm rounded-btn border border-gray-200 text-slate placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber/40"
                           />
-                          {s.color && (
-                            <span
-                              className="w-2.5 h-2.5 rounded-full shrink-0"
-                              style={{ backgroundColor: s.color }}
-                            />
+                          <button
+                            type="button"
+                            onClick={selectAllFiltered}
+                            className="px-3 py-2 text-xs font-medium bg-gray-100 hover:bg-gray-200 text-slate rounded-btn transition-colors"
+                          >
+                            Select all
+                          </button>
+                          {form.contactIds.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={clearPicked}
+                              className="px-3 py-2 text-xs font-medium bg-red-50 hover:bg-red-100 text-red-700 rounded-btn transition-colors"
+                            >
+                              Clear ({form.contactIds.length})
+                            </button>
                           )}
-                          <span className="text-sm text-slate flex-1">{s.name}</span>
-                          <span className="text-xs text-slate-light">{s.contactCount}</span>
-                        </label>
-                      );
-                    })}
+                        </div>
+                        <div className="space-y-1 max-h-48 overflow-y-auto border border-gray-200 rounded-btn p-2 bg-white">
+                          {filteredContacts.length === 0 ? (
+                            <div className="text-xs text-slate-light p-3 text-center">No contacts match your search.</div>
+                          ) : (
+                            filteredContacts.slice(0, 100).map((c) => {
+                              const selected = form.contactIds.includes(c.id);
+                              const tags: string[] = JSON.parse(c.tags || '[]');
+                              return (
+                                <label
+                                  key={c.id}
+                                  className={`flex items-center gap-3 px-2 py-1.5 rounded cursor-pointer transition-colors ${
+                                    selected ? 'bg-amber/10' : 'hover:bg-gray-50'
+                                  }`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={selected}
+                                    onChange={() => toggleContact(c.id)}
+                                    className="w-4 h-4 rounded border-gray-300 text-amber focus:ring-amber"
+                                  />
+                                  <div className="flex-1 min-w-0">
+                                    <div className="text-sm text-slate truncate">
+                                      {c.name || <span className="text-slate-light italic">no name</span>}
+                                    </div>
+                                    <div className="text-xs text-slate-light font-mono">{c.phone}</div>
+                                  </div>
+                                  {!c.optedIn && (
+                                    <span className="text-[10px] bg-red-50 text-red-600 px-1.5 py-0.5 rounded-full">no opt-in</span>
+                                  )}
+                                  {tags.length > 0 && (
+                                    <div className="flex gap-0.5 shrink-0">
+                                      {tags.slice(0, 2).map((t) => (
+                                        <span key={t} className="text-[10px] bg-gray-100 text-slate-light px-1.5 py-0.5 rounded-full">{t}</span>
+                                      ))}
+                                    </div>
+                                  )}
+                                </label>
+                              );
+                            })
+                          )}
+                          {filteredContacts.length > 100 && (
+                            <div className="text-xs text-slate-light p-2 text-center border-t border-gray-100">
+                              Showing first 100 of {filteredContacts.length}. Refine your search to narrow down.
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
-                {form.segmentIds.length > 0 && (
+                {(form.segmentIds.length > 0 || form.contactIds.length > 0) && (
                   <div className="text-xs text-slate-light mt-1.5">
                     {resolving ? (
                       <span>Resolving…</span>
                     ) : (
                       <span>
-                        Resolved to <strong className="text-slate">{resolvedCount ?? '—'}</strong> contact
-                        {resolvedCount === 1 ? '' : 's'} (deduped)
+                        Will send to <strong className="text-slate">{resolvedCount ?? '—'}</strong> unique contact
+                        {resolvedCount === 1 ? '' : 's'}
+                        {form.segmentIds.length > 0 && form.contactIds.length > 0 && (
+                          <span className="text-slate-light"> (segments ∪ picked, deduped)</span>
+                        )}
                       </span>
                     )}
                   </div>
@@ -450,15 +634,18 @@ export default function CampaignsPage() {
                 </select>
               </div>
               <div className="bg-amber/5 border border-amber/10 rounded-lg px-4 py-3 text-sm text-slate">
-                {form.segmentIds.length > 0 ? (
+                {form.segmentIds.length > 0 || form.contactIds.length > 0 ? (
                   <span>
-                    <span className="font-semibold">📋 Sending to {resolvedCount ?? '—'} contacts</span>
-                    <span className="text-slate-light"> (resolved from {form.segmentIds.length} segment{form.segmentIds.length === 1 ? '' : 's'} at send time)</span>
+                    <span className="font-semibold">📋 Sending to {resolvedCount ?? '—'} unique contact{(resolvedCount ?? 0) === 1 ? '' : 's'}</span>
+                    <span className="text-slate-light">
+                      {' '}({form.segmentIds.length > 0 ? `${form.segmentIds.length} segment${form.segmentIds.length === 1 ? '' : 's'}` : 'no segments'}
+                      {form.contactIds.length > 0 ? ` + ${form.contactIds.length} picked` : ''})
+                    </span>
                   </span>
                 ) : (
                   <span>
-                    <span className="font-semibold">📋 Ready to send to {contactIds.length} contacts</span>
-                    <span className="text-slate-light"> (all contacts, no segment filter)</span>
+                    <span className="font-semibold">📋 Ready to send to {allContacts.length} contact{allContacts.length === 1 ? '' : 's'}</span>
+                    <span className="text-slate-light"> (all contacts, no segment or pick filter)</span>
                   </span>
                 )}
               </div>

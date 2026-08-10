@@ -199,9 +199,10 @@ export async function POST(req: Request) {
   }
 
   // Mark SENDING if this is the first batch (campaign status is DRAFT or SCHEDULED)
-  // Resolve segmentIds at send time if the campaign was created with segments
-  // instead of a static contactIds snapshot. This means a campaign scheduled
-  // for Friday will pick up contacts tagged on Thursday.
+  // Resolve segmentIds at send time if the campaign was created with segments.
+  // This is independent of whether contactIds were also provided at create time:
+  // both sources contribute to the final recipient set, deduped by contact id.
+  // Means a campaign scheduled for Friday will pick up contacts tagged on Thursday.
   const preCampaign = await prisma.campaign.findUnique({
     where: { id: campaignId, userId: user.id },
     select: { id: true, segmentIds: true, _count: { select: { messages: true } } },
@@ -209,44 +210,72 @@ export async function POST(req: Request) {
   if (!preCampaign) {
     return NextResponse.json({ error: 'Campaign not found' }, { status: 404 });
   }
+  let resolvedSegmentContactIds: Set<string> = new Set();
   if (preCampaign.segmentIds) {
     let segIds: string[] = [];
     try { segIds = JSON.parse(preCampaign.segmentIds); } catch {}
-    if (segIds.length > 0 && preCampaign._count.messages === 0) {
+    if (segIds.length > 0) {
       // Resolve segments → contact IDs at send time
       const segs = await prisma.segment.findMany({
         where: { id: { in: segIds }, userId: user.id },
         select: { tag: true },
       });
       const tags = new Set(segs.map((s) => s.tag));
-      const contacts = await prisma.contact.findMany({
+      const allContacts = await prisma.contact.findMany({
         where: { userId: user.id },
         select: { id: true, tags: true },
       });
-      const matchedIds: string[] = [];
-      for (const c of contacts) {
+      for (const c of allContacts) {
         try {
           const ct: string[] = JSON.parse(c.tags || '[]');
-          if (ct.some((t) => tags.has(t))) matchedIds.push(c.id);
+          if (ct.some((t) => tags.has(t))) resolvedSegmentContactIds.add(c.id);
         } catch {}
       }
-      if (matchedIds.length === 0) {
-        return NextResponse.json(
-          { error: 'No contacts match the campaign segments' },
-          { status: 400 }
-        );
-      }
-      // Create the Message rows now (so the rest of the send logic can proceed).
-      // Duplicate-key conflicts on (campaignId, contactId) are avoided by the
-      // preCampaign._count.messages === 0 check above.
+    }
+  }
+
+  // If the campaign has only segmentIds (no static contactIds snapshot) AND
+  // no Message rows exist yet, create them now from the resolved segment.
+  // If the campaign has BOTH, create Message rows for the segment-resolved
+  // contacts that aren't already in the snapshot. Duplicate-key conflicts on
+  // (campaignId, contactId) are avoided by the _count.messages === 0 check
+  // for the no-snapshot case, and by skipping existing contactIds in the both case.
+  if (resolvedSegmentContactIds.size > 0) {
+    if (preCampaign._count.messages === 0) {
+      // No snapshot — create Message rows for all segment-resolved contacts
       await prisma.message.createMany({
-        data: matchedIds.map((contactId) => ({
+        data: Array.from(resolvedSegmentContactIds).map((contactId) => ({
           campaignId: preCampaign.id,
           contactId,
           status: 'PENDING',
         })),
       });
+    } else {
+      // Snapshot exists — only add segment-resolved contacts that aren't
+      // already in the snapshot. This enables "all phones-segment + 3 specific".
+      const existingMessages = await prisma.message.findMany({
+        where: { campaignId: preCampaign.id },
+        select: { contactId: true },
+      });
+      const existingContactIds = new Set(existingMessages.map((m) => m.contactId));
+      const newRows: { campaignId: string; contactId: string; status: 'PENDING' }[] = [];
+      resolvedSegmentContactIds.forEach((cid) => {
+        if (!existingContactIds.has(cid)) {
+          newRows.push({ campaignId: preCampaign.id, contactId: cid, status: 'PENDING' });
+        }
+      });
+      if (newRows.length > 0) {
+        await prisma.message.createMany({ data: newRows });
+      }
     }
+  }
+
+  // If we still have zero resolved contacts AND zero snapshot messages, fail fast.
+  if (resolvedSegmentContactIds.size === 0 && preCampaign._count.messages === 0) {
+    return NextResponse.json(
+      { error: 'No contacts to send to. Select at least one segment or contact.' },
+      { status: 400 }
+    );
   }
 
   const campaign = await prisma.campaign.findUnique({
