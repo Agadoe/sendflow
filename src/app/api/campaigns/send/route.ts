@@ -1,10 +1,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
-import https from 'https';
-import http from 'http';
+import { fetchDaemon, formatPhone, DAEMON_URL } from '@/lib/daemon-fetch';
 
-const DAEMON_URL = process.env.WACLI_DAEMON_URL || 'http://84.8.221.131';
 
 // ─── In-Memory Rate Limit (resets on cold start; use Redis in production) ───
 const rateMap = new Map<string, any>();
@@ -48,47 +46,8 @@ function checkRateLimit(userId: string): { ok: boolean; retryAfter?: number; rea
 }
 
 // ─── Native fetch for daemon ────────────────────────────────────────────────
-function fetchDaemon(
-  path: string,
-  options: { method?: string; headers?: http.OutgoingHttpHeaders; body?: string } = {}
-): Promise<{ ok: boolean; status: number; json: () => Promise<any> }> {
-  return new Promise((resolve, reject) => {
-    const url = new URL(path, DAEMON_URL);
-    const client = url.protocol === 'https:' ? https : http;
-    const req = client.request(
-      {
-        hostname: url.hostname,
-        port: url.port || undefined,
-        path: url.pathname + url.search,
-        method: options.method || 'GET',
-        headers: options.headers,
-        rejectUnauthorized: false,
-      },
-      (res) => {
-        let data = '';
-        res.on('data', (chunk) => (data += chunk));
-        res.on('end', () => {
-          resolve({
-            ok: !!(res.statusCode && res.statusCode >= 200 && res.statusCode < 300),
-            status: res.statusCode || 0,
-            json: () => Promise.resolve(JSON.parse(data)),
-          });
-        });
-      }
-    );
-    req.on('error', reject);
-    if (options.body) req.write(options.body);
-    req.end();
-  });
-}
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
-function formatPhone(phone: string): string {
-  const clean = (phone || '').replace(/\D/g, '');
-  if (clean.startsWith('0')) return `+233${clean.slice(1)}`;
-  if (clean.startsWith('233')) return `+${clean}`;
-  return `+233${clean}`;
-}
 
 function isBusinessHours(timezone: string): boolean {
   try {
