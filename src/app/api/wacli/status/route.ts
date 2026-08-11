@@ -14,7 +14,7 @@ export async function GET() {
     }
 
     // Fetch status from the daemon (uses /health which returns { connection })
-    const res = await fetchDaemon('/wacli/health', {
+    const res = await fetchDaemon('/wacli/status', {
       headers: {
         'X-User-Id': user.id
       }

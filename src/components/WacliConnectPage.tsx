@@ -16,7 +16,11 @@ export default function WacliConnectPage() {
   const [polling, setPolling] = useState(false);
 
   useEffect(() => {
-    checkStatus();
+    checkStatus().then((data) => {
+      if (data?.state === 'QR_READY') {
+        fetchQrAndRender(1);
+      }
+    });
   }, []);
 
   // Poll /status while showing QR — daemon transitions QR_READY → CONNECTED after scan
@@ -28,12 +32,12 @@ export default function WacliConnectPage() {
     return () => clearInterval(interval);
   }, [polling]);
 
-  async function checkStatus(silent = false) {
+  async function checkStatus(silent = false): Promise<{ state: string; phone?: string | null; connected: boolean } | null> {
     try {
       const res = await fetch('/api/wacli/status', { cache: 'no-store' });
       if (res.status === 401) {
         if (!silent) toast.error('Session expired — please sign in again');
-        return;
+        return null;
       }
       const data = await res.json();
       setState(data.state || 'DISCONNECTED');
@@ -45,9 +49,11 @@ export default function WacliConnectPage() {
         setPolling(false);
         if (!silent) toast.success('WhatsApp connected');
       }
+      return data;
     } catch (err: any) {
       console.error('checkStatus error:', err);
       if (!silent) toast.error('Could not reach wacli daemon');
+      return null;
     } finally {
       setChecking(false);
     }
@@ -113,6 +119,10 @@ export default function WacliConnectPage() {
         setPolling(false);
         toast.success('WhatsApp connected');
       } else if (qrData.state === 'CONNECTING' && attempt < MAX_ATTEMPTS) {
+        toast.loading(`Generating QR code… (attempt ${attempt}/${MAX_ATTEMPTS})`, { id: 'qr' });
+        setTimeout(() => fetchQrAndRender(attempt + 1), 3000);
+      } else if (attempt < MAX_ATTEMPTS) {
+        // Any other state (DISCONNECTED, etc.) without a QR — keep polling
         toast.loading(`Generating QR code… (attempt ${attempt}/${MAX_ATTEMPTS})`, { id: 'qr' });
         setTimeout(() => fetchQrAndRender(attempt + 1), 3000);
       } else {

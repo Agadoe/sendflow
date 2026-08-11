@@ -131,7 +131,7 @@ async function probeWhatsAppContext() {
   } catch (e) {
     return { ok: false, reason: 'eval-failed:' + (e.message || 'unknown') };
   }
-  if (title !== 'WhatsApp Web') return { ok: false, reason: 'wrong-title:' + JSON.stringify(title) };
+  if (!title || (!title.includes('WhatsApp') && !title.includes('WhatsApp Web'))) return { ok: false, reason: 'wrong-title:' + JSON.stringify(title) };
   if (!appReady) return { ok: false, reason: 'no-#app-root' };
   return { ok: true };
 }
@@ -156,9 +156,10 @@ async function safeSendMessage(formatted, message) {
   return client.sendMessage(formatted, message);
 }
 
+const DEFAULT_CHROME_MAC = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const puppeteerOpts = {
   headless: true,
-  executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || DEFAULT_CHROME_MAC,
   args: [
     '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage',
     '--disable-gpu', '--disable-software-rasterizer', '--disable-web-security',

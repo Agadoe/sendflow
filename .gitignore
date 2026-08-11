@@ -53,3 +53,7 @@ tsconfig.tsbuildinfo
 .env.prod
 MEMORY-BUGS.md
 .env*.local
+
+# Extra env patterns (added 2026-08-11 — captured real creds on stage)
+.env.production.new
+.env.v
