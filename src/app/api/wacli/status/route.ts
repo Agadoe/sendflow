@@ -27,21 +27,19 @@ export async function GET() {
 
     const data = await res.json();
 
-    // Exhaustive state mapping from daemon → app
-    // Daemon /wacli/health returns: { status: "ok", connection: "open"|"close"|"connecting", ... }
-    // We must check `data.connection` explicitly — `data.status` is "ok" even when connected.
-    const connectionState = data.connection; // "open" | "close" | "connecting" | undefined
+    // Daemon /wacli/status returns: { connected: bool, state: 'DISCONNECTED'|'QR_READY'|'CONNECTED'|'CONNECTING'|'RECOVERING'|'INIT_FAILED'|'AUTH_FAILED', phone?: string }
+    const stateRaw = String(data.state || '').toUpperCase();
     let appState: string;
-    if (data.connected === true || connectionState === 'open') {
+    if (data.connected === true || stateRaw === 'CONNECTED') {
       appState = 'CONNECTED';
-    } else if (connectionState === 'close' || connectionState === 'disconnected') {
-      appState = 'DISCONNECTED';
-    } else if (data.qr || data.status === 'QR_READY') {
+    } else if (stateRaw === 'QR_READY') {
       appState = 'QR_READY';
-    } else if (connectionState === 'connecting' || data.status === 'connecting' || data.status === 'waiting' || data.status === 'INITIALIZING' || data.status === 'STARTING' || data.status === 'RECONNECTING') {
+    } else if (stateRaw === 'CONNECTING' || stateRaw === 'RECOVERING' || stateRaw === 'INITIALIZING' || stateRaw === 'STARTING' || stateRaw === 'RECONNECTING') {
       appState = 'CONNECTING';
+    } else if (stateRaw === 'AUTH_FAILED' || stateRaw === 'INIT_FAILED') {
+      appState = 'ERROR';
     } else {
-      appState = connectionState || data.status || 'DISCONNECTED';
+      appState = 'DISCONNECTED';
     }
 
     // Only write to DB if state actually changed — prevents hammering the DB
