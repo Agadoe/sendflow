@@ -10,7 +10,11 @@ import http from 'http';
  * - network errors (DNS, connection refused, timeout)
  * - structured logging for debugging
  */
-const DAEMON_URL = process.env.WACLI_DAEMON_URL || 'http://84.8.221.131';
+// Default to the LOCAL wacli daemon on this Mac — everything runs on macOS now
+// (no VPS). The Vercel deploy overrides this via the WACLI_DAEMON_URL env var
+// (the ngrok tunnel URL). The old 'http://84.8.221.131' VPS Baileys fallback is
+// gone — that host is dead and was silently causing HTTP 000 dispatch failures.
+const DAEMON_URL = process.env.WACLI_DAEMON_URL || 'http://localhost:4555';
 
 export type DaemonResponse = {
   ok: boolean;

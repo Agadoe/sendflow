@@ -25,13 +25,16 @@ export async function POST(req: Request) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const userId = session.id;
 
-  const { name, content, mediaUrl, scheduledAt, recurrence, contactIds, segmentIds } = await req.json();
+  const { name, content, mediaUrl, scheduledAt, recurrence, contactIds, segmentIds, channel } = await req.json();
   if (!name || !content) {
     return NextResponse.json({ error: 'Name and content required' }, { status: 400 });
   }
   if ((!contactIds || contactIds.length === 0) && (!segmentIds || segmentIds.length === 0)) {
     return NextResponse.json({ error: 'Provide contactIds or segmentIds' }, { status: 400 });
   }
+  // channel defaults to "whatsapp" (existing behaviour). "sms" routes sends
+  // through the SMS provider layer (src/lib/sms) instead of the wacli daemon.
+  const sendChannel = channel === 'sms' ? 'sms' : 'whatsapp';
 
   // Enforce monthly campaign limit
   const canCreate = await checkCampaignLimit(userId, prisma);
@@ -53,6 +56,7 @@ export async function POST(req: Request) {
       status: scheduledAt ? 'SCHEDULED' : 'DRAFT',
       scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
       recurrence: recurrence || null,
+      channel: sendChannel,
     },
   });
 

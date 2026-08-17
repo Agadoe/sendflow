@@ -92,6 +92,10 @@ model Campaign {
   scheduledAt DateTime?
   sentAt      DateTime?
   recurrence  String? // DAILY | WEEKLY | MONTHLY | null
+  // Delivery channel for this campaign. Defaults to "whatsapp" so every
+  // existing campaign keeps its current behaviour. "sms" routes sends
+  // through the SMS provider layer (src/lib/sms) instead of the wacli daemon.
+  channel     String    @default("whatsapp") // whatsapp | sms
   // Optional list of Segment IDs to resolve at send time (JSON array string).
   // When set, the send route resolves these to contactIds fresh on each
   // execution (so newly-tagged contacts get scheduled sends).

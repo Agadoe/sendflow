@@ -7,7 +7,7 @@ import { NextRequest } from 'next/server';
  * POST /api/segments/resolve — resolve segment IDs to contact IDs.
  * Body: { segmentIds: string[] }
  *
- * Returns: { contactIds: string[], count: number, bySegment: { id, name, count }[] }
+ * Returns: { contactIds: string[], count: number, optedInCount: number, bySegment: { id, name, count }[] }
  *
  * v1 behavior (single-tag-per-segment):
  *   - For each segment, find all contacts whose tags JSON array contains the
@@ -39,7 +39,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'segmentIds must be an array' }, { status: 400 });
   }
   if (segmentIds.length === 0) {
-    return NextResponse.json({ contactIds: [], count: 0, bySegment: [] });
+    return NextResponse.json({ contactIds: [], count: 0, optedInCount: 0, bySegment: [] });
   }
   if (segmentIds.length > 50) {
     return NextResponse.json({ error: 'Too many segments (max 50)' }, { status: 400 });
@@ -59,12 +59,14 @@ export async function POST(req: Request) {
   // switch to a JSON-tag index or per-tag queries.
   const contacts = await prisma.contact.findMany({
     where: { userId },
-    select: { id: true, tags: true },
+    select: { id: true, tags: true, optedIn: true },
   });
 
-  // Build per-tag set, then per-segment union.
+  // Build per-tag set, then per-segment union. optedInUnion tracks which union
+  // members have consented (SMS/WhatsApp marketing only goes to opted-in).
   const bySegment: { id: string; name: string; count: number }[] = [];
   const union = new Set<string>();
+  const optedInUnion = new Set<string>();
   for (const seg of segments) {
     let segCount = 0;
     for (const c of contacts) {
@@ -72,6 +74,7 @@ export async function POST(req: Request) {
         const tags: string[] = JSON.parse(c.tags || '[]');
         if (tags.includes(seg.tag)) {
           union.add(c.id);
+          if (c.optedIn) optedInUnion.add(c.id);
           segCount++;
         }
       } catch {}
@@ -82,6 +85,7 @@ export async function POST(req: Request) {
   return NextResponse.json({
     contactIds: Array.from(union),
     count: union.size,
+    optedInCount: optedInUnion.size,
     bySegment,
   });
 }
