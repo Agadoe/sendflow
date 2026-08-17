@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import toast, { Toaster } from 'react-hot-toast';
+import { parseCSV } from '@/lib/csv';
 
 export default function ContactsPage() {
   const [contacts, setContacts] = useState<any[]>([]);
@@ -49,21 +50,6 @@ export default function ContactsPage() {
     } finally {
       setLoading(false);
     }
-  }
-
-  function parseCSV(text: string): string[][] {
-    return text.split('\n').map(row => {
-      const cells = [];
-      let current = '';
-      let inQuotes = false;
-      for (const char of row) {
-        if (char === '"') { inQuotes = !inQuotes; }
-        else if (char === ',' && !inQuotes) { cells.push(current.trim()); current = ''; }
-        else { current += char; }
-      }
-      cells.push(current.trim());
-      return cells;
-    });
   }
 
   function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
